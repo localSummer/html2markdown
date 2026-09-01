@@ -75,7 +75,7 @@ export default function App() {
           <div className="flex size-6 items-center justify-center rounded-md bg-gradient-to-br from-primary to-primary/80 text-[10px] font-bold text-primary-foreground shadow-[0_2px_6px_-1px_var(--color-primary)/40]">
             M
           </div>
-          <span className="text-sm font-semibold tracking-tight">html2md</span>
+          <span className="text-sm font-semibold tracking-tight">HTML2MD</span>
         </div>
         <nav ref={navRef} className="relative mt-1 flex gap-1 px-2">
           {TABS.map((t, i) => {
