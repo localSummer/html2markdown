@@ -1,4 +1,4 @@
-import { SYSTEM_PROMPT, VISION_IMAGE_PROMPT, assertWithinLimit, completionsUrl, MAX_HTML_CHARS } from './prompt';
+import { SYSTEM_PROMPT, TASK_SYSTEM_PROMPT, VISION_IMAGE_PROMPT, assertWithinLimit, buildConvertMessages, completionsUrl, MAX_HTML_CHARS } from './prompt';
 
 describe('assertWithinLimit', () => {
   it('allows content under the cap', () => {
@@ -43,5 +43,22 @@ describe('SYSTEM_PROMPT', () => {
     expect(SYSTEM_PROMPT).toContain('markdown');
     expect(SYSTEM_PROMPT).toContain('不要编造');
     expect(SYSTEM_PROMPT).toContain('GFM');
+  });
+});
+
+describe('buildConvertMessages', () => {
+  it('uses the default system prompt when task is empty', () => {
+    const msgs = buildConvertMessages('<p>hi</p>', '  ');
+    expect(msgs).toEqual([
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: '<p>hi</p>' },
+    ]);
+  });
+
+  it('puts a custom task in front of the html', () => {
+    const msgs = buildConvertMessages('<p>hi</p>', '用三条要点总结');
+    expect(msgs[0]).toEqual({ role: 'system', content: TASK_SYSTEM_PROMPT });
+    expect(msgs[1]?.content).toContain('用三条要点总结');
+    expect(msgs[1]?.content).toContain('<p>hi</p>');
   });
 });

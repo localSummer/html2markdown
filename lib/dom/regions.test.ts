@@ -1,4 +1,4 @@
-import { detectRegions, findMainElement } from './regions';
+import { detectRegions, findMainElement, liveRootsFor } from './regions';
 
 function parse(html: string): Document {
   return new DOMParser().parseFromString(html, 'text/html');
@@ -79,5 +79,12 @@ describe('detectRegions', () => {
   it('returns empty when body has no text', () => {
     const doc = parse(`<div></div>`);
     expect(detectRegions(doc)).toEqual([]);
+  });
+});
+
+describe('liveRootsFor', () => {
+  it('returns no roots for a custom pick', () => {
+    const doc = parse(`<article><p>${LONG_TEXT}</p></article>`);
+    expect(liveRootsFor(doc, 'custom')).toEqual([]);
   });
 });

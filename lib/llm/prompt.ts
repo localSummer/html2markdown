@@ -16,6 +16,29 @@ export const SYSTEM_PROMPT = `你将把用户提供的 HTML 片段转成 GitHub 
 - 不要编造原文没有的段落、标题或内容
 - 只输出 Markdown 正文，不要前言或解释`;
 
+export const TASK_SYSTEM_PROMPT = `你将根据用户的任务说明，仅基于提供的 HTML 片段作答。
+规则：
+- 只使用这段 HTML 中的信息，不要编造原文没有的内容
+- 按用户任务要求的格式输出
+- 不要前言或解释，不要用 \`\`\`markdown 把整篇结果包起来`;
+
+export function buildConvertMessages(
+  html: string,
+  taskPrompt?: string,
+): Array<{ role: 'system' | 'user'; content: string }> {
+  const task = taskPrompt?.trim();
+  if (!task) {
+    return [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: html },
+    ];
+  }
+  return [
+    { role: 'system', content: TASK_SYSTEM_PROMPT },
+    { role: 'user', content: `${task}\n\n---\n${html}` },
+  ];
+}
+
 export const MAX_HTML_CHARS = 80_000;
 
 export function assertWithinLimit(html: string, limit = MAX_HTML_CHARS): void {

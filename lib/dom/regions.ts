@@ -152,6 +152,7 @@ export function detectRegions(doc: Document, baseUrl = doc.baseURI || ''): Regio
 }
 
 export function liveRootsFor(doc: Document, type: RegionType): Element[] {
+  if (type === 'custom') return [];
   if (type === 'full') return doc.body ? [doc.body] : [];
   if (type === 'nav') return findNavElements(doc);
   if (type === 'main') return [findMainElement(doc)];

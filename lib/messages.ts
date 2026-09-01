@@ -1,4 +1,4 @@
-export type RegionType = 'main' | 'nav' | 'main_nav' | 'full';
+export type RegionType = 'main' | 'nav' | 'main_nav' | 'full' | 'custom';
 
 export type RegionSummary = {
   id: RegionType;
@@ -23,6 +23,8 @@ export type ClearHighlightMessage = { type: 'CLEAR_HIGHLIGHT' };
 export type ExtractMessage = { type: 'EXTRACT'; region: RegionType };
 export type FetchImagesMessage = { type: 'FETCH_IMAGES'; urls: string[] };
 export type OpenSidePanelMessage = { type: 'OPEN_SIDEPANEL' };
+export type PickStartMessage = { type: 'PICK_START' };
+export type PickCancelMessage = { type: 'PICK_CANCEL'; forget?: boolean };
 
 export type ExtensionMessage =
   | PingMessage
@@ -31,7 +33,9 @@ export type ExtensionMessage =
   | ClearHighlightMessage
   | ExtractMessage
   | FetchImagesMessage
-  | OpenSidePanelMessage;
+  | OpenSidePanelMessage
+  | PickStartMessage
+  | PickCancelMessage;
 
 export type PingResponse = { ok: true };
 export type ScanResponse = {
@@ -52,6 +56,11 @@ export type FetchImagesResponse = {
   ok: true;
   images: { url: string; dataUrl: string }[];
 };
+export type PickResultResponse = {
+  ok: true;
+  tag: string;
+  charCount: number;
+};
 export type ErrorResponse = { ok: false; error: string };
 
 export type ExtensionResponse =
@@ -59,6 +68,7 @@ export type ExtensionResponse =
   | ScanResponse
   | ExtractResponse
   | FetchImagesResponse
+  | PickResultResponse
   | { ok: true }
   | ErrorResponse;
 
@@ -72,6 +82,8 @@ export function isExtensionMessage(value: unknown): value is ExtensionMessage {
     type === 'CLEAR_HIGHLIGHT' ||
     type === 'EXTRACT' ||
     type === 'FETCH_IMAGES' ||
-    type === 'OPEN_SIDEPANEL'
+    type === 'OPEN_SIDEPANEL' ||
+    type === 'PICK_START' ||
+    type === 'PICK_CANCEL'
   );
 }

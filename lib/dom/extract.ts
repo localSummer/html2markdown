@@ -1,4 +1,5 @@
 import { cleanClone } from './denoise';
+import { getPickedElement } from './picker';
 import { collectImages, findMainElement, findNavElements, liveRootsFor } from './regions';
 import type { ExtractResponse, ImageMeta, RegionType } from '../messages';
 
@@ -25,7 +26,19 @@ function extractMainHtml(baseUrl: string): { html: string; images: ImageMeta[] }
   return { html, images: collectImages(liveMain, baseUrl) };
 }
 
+export function extractElement(el: Element, baseUrl: string): ExtractResponse {
+  const cloned = cloneIntoDocument([el]);
+  const html = cleanClone(cloned.body, baseUrl, false);
+  return { ok: true, title: document.title, html, images: collectImages(el, baseUrl) };
+}
+
 export function extractRegion(type: RegionType, baseUrl: string): ExtractResponse {
+  if (type === 'custom') {
+    const el = getPickedElement();
+    if (!el) throw new Error('指定区域已失效，请重新点选');
+    return extractElement(el, baseUrl);
+  }
+
   if (type === 'main') {
     const { html, images } = extractMainHtml(baseUrl);
     return { ok: true, title: document.title, html, images, useReadability: true };

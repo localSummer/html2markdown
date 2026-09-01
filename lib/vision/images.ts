@@ -32,20 +32,90 @@ export function selectVisionImages(
   return { selected, skipped, truncated };
 }
 
+type ImageSlot = { start: number; end: number; url: string };
+
+function decodeEntities(value: string): string {
+  return value.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+}
+
+function normalizeUrl(url: string): string {
+  const raw = decodeEntities(url.trim());
+  try {
+    const parsed = new URL(raw);
+    return `${parsed.origin}${decodeURIComponent(parsed.pathname)}`.replace(/\/$/, '');
+  } catch {
+    try {
+      return decodeURIComponent(raw).replace(/\/$/, '');
+    } catch {
+      return raw.replace(/\/$/, '');
+    }
+  }
+}
+
+function sameImageUrl(a: string, b: string): boolean {
+  if (a === b) return true;
+  const na = normalizeUrl(a);
+  const nb = normalizeUrl(b);
+  if (na === nb) return true;
+  try {
+    const path = new URL(a).pathname;
+    if (path.length > 1 && (b.includes(path) || decodeEntities(b).includes(path))) return true;
+  } catch {
+    /* ignore */
+  }
+  try {
+    const path = new URL(b).pathname;
+    if (path.length > 1 && (a.includes(path) || decodeEntities(a).includes(path))) return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
+function collectImageSlots(markdown: string): ImageSlot[] {
+  const slots: ImageSlot[] = [];
+  const mdRe = /!\[([^\]]*)\]\((?:<)?([^)\s>]+)(?:>)?(?:\s+"[^"]*")?\)/g;
+  let match: RegExpExecArray | null;
+  while ((match = mdRe.exec(markdown))) {
+    slots.push({ start: match.index, end: match.index + match[0].length, url: match[2] });
+  }
+  const htmlRe = /<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*\/?>/gi;
+  while ((match = htmlRe.exec(markdown))) {
+    slots.push({ start: match.index, end: match.index + match[0].length, url: match[1] });
+  }
+  slots.sort((a, b) => a.start - b.start);
+  return slots;
+}
+
 export function insertCaptions(
   markdown: string,
   captions: Array<{ url: string; text: string }>,
 ): string {
-  let out = markdown;
+  const slots = collectImageSlots(markdown);
+  const used = new Set<number>();
+  const insertions: Array<{ at: number; block: string }> = [];
+  const leftovers: string[] = [];
+
   for (const { url, text } of captions) {
-    const escaped = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(`(!\\[[^\\]]*\\]\\(${escaped}\\))`);
-    if (!re.test(out)) continue;
     const block = formatCaptionBlock(text);
     if (!block) continue;
-    out = out.replace(re, `$1\n\n${block}`);
+    let idx = slots.findIndex((slot, i) => !used.has(i) && sameImageUrl(slot.url, url));
+    if (idx < 0) idx = slots.findIndex((_, i) => !used.has(i));
+    if (idx < 0) {
+      leftovers.push(block);
+      continue;
+    }
+    used.add(idx);
+    insertions.push({ at: slots[idx].end, block });
   }
-  return out;
+
+  insertions.sort((a, b) => b.at - a.at);
+  let out = markdown;
+  for (const { at, block } of insertions) {
+    out = `${out.slice(0, at)}\n\n${block}${out.slice(at)}`;
+  }
+  if (leftovers.length === 0) return out;
+  return `${out.replace(/\s*$/, '')}\n\n${leftovers.join('\n\n')}\n`;
 }
 
 export function formatCaptionBlock(text: string): string {

@@ -1,4 +1,4 @@
-import { completionsUrl, SYSTEM_PROMPT } from './prompt';
+import { buildConvertMessages, completionsUrl } from './prompt';
 
 export type StreamCallbacks = {
   onDelta: (text: string) => void;
@@ -114,15 +114,14 @@ export async function convertHtmlToMarkdown(options: {
   baseURL: string;
   apiKey: string;
   model: string;
+  taskPrompt?: string;
   onDelta: (text: string) => void;
   signal?: AbortSignal;
 }): Promise<string> {
+  const { html, taskPrompt, ...rest } = options;
   return chatCompletions({
-    ...options,
+    ...rest,
     stream: true,
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: options.html },
-    ],
+    messages: buildConvertMessages(html, taskPrompt),
   });
 }

@@ -1,5 +1,6 @@
 import { detectRegions } from './regions';
-import { clearHighlight, highlightRegion } from './highlight';
+import { clearHighlight, highlightElements, highlightRegion } from './highlight';
+import { cancelPicker, getPickedElement, startPicker } from './picker';
 import type { ExtensionMessage, ExtensionResponse } from '../messages';
 
 async function fetchImageDataUrls(urls: string[]): Promise<{ url: string; dataUrl: string }[]> {
@@ -32,6 +33,7 @@ export async function handlePageMessage(message: ExtensionMessage): Promise<Exte
     case 'PING':
       return { ok: true };
     case 'SCAN': {
+      cancelPicker({ forget: true });
       const regions = detectRegions(document);
       if (regions.length === 0) {
         return { ok: false, error: '当前页没有可提取的文本，请等待加载完成后重新扫描' };
@@ -44,10 +46,22 @@ export async function handlePageMessage(message: ExtensionMessage): Promise<Exte
       };
     }
     case 'HIGHLIGHT':
-      highlightRegion(message.region);
+      if (message.region === 'custom') {
+        const el = getPickedElement();
+        if (el) highlightElements([el]);
+        else clearHighlight();
+      } else {
+        highlightRegion(message.region);
+      }
       return { ok: true };
     case 'CLEAR_HIGHLIGHT':
+      cancelPicker();
       clearHighlight();
+      return { ok: true };
+    case 'PICK_START':
+      return startPicker();
+    case 'PICK_CANCEL':
+      cancelPicker({ forget: Boolean(message.forget) });
       return { ok: true };
     case 'EXTRACT': {
       const { extractRegion } = await import('./extract');

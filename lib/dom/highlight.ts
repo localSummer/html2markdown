@@ -7,7 +7,8 @@ const HOST_ID = 'html2md-highlight-host';
 let host: HTMLElement | null = null;
 let shadow: ShadowRoot | null = null;
 let layer: HTMLElement | null = null;
-let activeRegion: RegionType | null = null;
+let activeRoots: Element[] = [];
+let strokeOnly = false;
 let raf = 0;
 let attached = false;
 
@@ -49,30 +50,13 @@ function ensureHost(): HTMLElement {
   return host;
 }
 
-let cachedRegion: RegionType | null = null;
-let cachedRoots: Element[] = [];
-
-function rootsFor(region: RegionType): Element[] {
-  if (cachedRegion === region) {
-    const live = cachedRoots.filter((el) => el.isConnected);
-    if (live.length > 0) {
-      cachedRoots = live;
-      return live;
-    }
-  }
-  cachedRegion = region;
-  cachedRoots = liveRootsFor(document, region);
-  return cachedRoots;
-}
-
 function paint(): void {
-  if (!layer || !activeRegion) {
+  if (!layer || activeRoots.length === 0) {
     layer?.replaceChildren();
     return;
   }
-  const roots = rootsFor(activeRegion);
+  const roots = activeRoots.filter((el) => el.isConnected);
   layer.replaceChildren();
-  const strokeOnly = activeRegion === 'full';
   for (const el of roots) {
     const r = el.getBoundingClientRect();
     const box = intersectViewport(
@@ -113,23 +97,29 @@ function detachListeners(): void {
   attached = false;
 }
 
-export function highlightRegion(region: RegionType | null): void {
-  activeRegion = region;
-  if (!region) {
+export function highlightElements(els: Element[], opts?: { stroke?: boolean }): void {
+  activeRoots = els.filter((el) => el.isConnected);
+  strokeOnly = Boolean(opts?.stroke);
+  if (activeRoots.length === 0) {
     clearHighlight();
     return;
   }
-  cachedRegion = null;
-  cachedRoots = [];
   ensureHost();
   attachListeners();
   paint();
 }
 
+export function highlightRegion(region: RegionType | null): void {
+  if (!region || region === 'custom') {
+    if (!region) clearHighlight();
+    return;
+  }
+  highlightElements(liveRootsFor(document, region), { stroke: region === 'full' });
+}
+
 export function clearHighlight(): void {
-  activeRegion = null;
-  cachedRegion = null;
-  cachedRoots = [];
+  activeRoots = [];
+  strokeOnly = false;
   detachListeners();
   if (raf) {
     cancelAnimationFrame(raf);
@@ -139,4 +129,8 @@ export function clearHighlight(): void {
   host = null;
   shadow = null;
   layer = null;
+}
+
+export function highlightHostId(): string {
+  return HOST_ID;
 }

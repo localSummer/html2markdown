@@ -1,6 +1,11 @@
 import type { RegionSummary, RegionType } from '../../../lib/messages';
 
-export type Phase = 'idle' | 'scanning' | 'ready' | 'converting' | 'done' | 'cancelled';
+export type Phase = 'idle' | 'scanning' | 'picking' | 'ready' | 'converting' | 'done' | 'cancelled';
+
+export type PickedRegion = {
+  tag: string;
+  charCount: number;
+};
 
 export type TabState = {
   tabUrl: string | undefined;
@@ -11,6 +16,8 @@ export type TabState = {
   error: string;
   regions: RegionSummary[];
   selected: RegionType;
+  picked: PickedRegion | null;
+  taskPrompt: string;
   markdown: string;
   visionHint: string;
   progress: number;
@@ -26,6 +33,8 @@ export const FRESH_STATE: TabState = {
   error: '',
   regions: [],
   selected: 'main',
+  picked: null,
+  taskPrompt: '',
   markdown: '',
   visionHint: '',
   progress: 0,

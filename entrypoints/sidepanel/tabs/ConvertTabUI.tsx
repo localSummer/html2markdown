@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Copy, Download, ScanSearch, X } from 'lucide-react';
+import { Copy, Download, MousePointerClick, ScanSearch, X } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,6 +24,7 @@ const REGION_LABELS: Record<RegionType, string> = {
   nav: '导航',
   main_nav: '内容+导航',
   full: '全文',
+  custom: '指定区域',
 };
 
 function ProgressBar({
@@ -67,6 +68,7 @@ export function ConvertTabUI(props: {
   settings: Settings;
   onOpenSettings: () => void;
   onScan: () => void;
+  onPick: () => void;
   onCancelScan: () => void;
   onAbort: () => void;
   onConvert: () => void;
@@ -74,6 +76,7 @@ export function ConvertTabUI(props: {
   onDownload: () => void;
   onHighlight: (r: RegionType | null) => void;
   onSelect: (r: RegionType) => void;
+  onTaskPrompt: (prompt: string) => void;
   highlightOn: boolean;
   onToggleHighlight: (on: boolean) => void;
 }) {
@@ -89,6 +92,7 @@ export function ConvertTabUI(props: {
     settings,
     onOpenSettings,
     onScan,
+    onPick,
     onCancelScan,
     onAbort,
     onConvert,
@@ -96,6 +100,7 @@ export function ConvertTabUI(props: {
     onDownload,
     onHighlight,
     onSelect,
+    onTaskPrompt,
     highlightOn,
     onToggleHighlight,
   } = props;
@@ -189,18 +194,23 @@ export function ConvertTabUI(props: {
         <Card className="gap-3 py-4">
           <CardHeader className="px-4">
             <CardTitle className="truncate">{active.pageTitle || '转换区域'}</CardTitle>
-            <CardDescription>先扫描，再选择要转换的区域</CardDescription>
+            <CardDescription>
+              {active.selected === 'custom' && active.picked
+                ? '已选定页面元素，可填写任务说明后转换'
+                : '先扫描或指定区域，再转换'}
+            </CardDescription>
             <CardAction>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <Label htmlFor="highlight-toggle" className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Switch
                     id="highlight-toggle"
                     checked={highlightOn}
+                    disabled={phase === 'picking'}
                     onCheckedChange={onToggleHighlight}
                   />
                   高亮
                 </Label>
-                <div className="flex gap-1.5">
+                <div className="flex flex-wrap justify-end gap-1.5">
                   <Button
                     variant="outline"
                     size="sm"
@@ -210,11 +220,20 @@ export function ConvertTabUI(props: {
                     <ScanSearch />
                     {active.regions.length ? '重新扫描' : '扫描当前页'}
                   </Button>
-                  {phase === 'scanning' || phase === 'converting' ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={Boolean(active.unsupported) || busy}
+                    onClick={onPick}
+                  >
+                    <MousePointerClick />
+                    指定区域
+                  </Button>
+                  {phase === 'scanning' || phase === 'picking' || phase === 'converting' ? (
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={phase === 'scanning' ? onCancelScan : onAbort}
+                      onClick={phase === 'converting' ? onAbort : onCancelScan}
                     >
                       <X />
                       取消
@@ -228,7 +247,33 @@ export function ConvertTabUI(props: {
             {phase === 'scanning' ? (
               <ProgressBar label="扫描中…原页仍可滚动" value={0} indeterminate />
             ) : null}
-            {active.regions.length > 0 ? (
+            {phase === 'picking' ? (
+              <ProgressBar label="请在页面上点击要转换的区域，Esc 取消" value={0} indeterminate />
+            ) : null}
+            {active.selected === 'custom' && active.picked && phase !== 'picking' ? (
+              <div className="grid gap-3">
+                <div className="flex items-center gap-2.5 rounded-lg border border-primary/40 bg-accent px-3 py-2.5 text-accent-foreground">
+                  <span className="size-2 rounded-full bg-primary shadow-[0_0_6px_var(--color-primary)]" />
+                  <span>
+                    &lt;{active.picked.tag}&gt;
+                  </span>
+                  <span className="ml-auto text-xs text-muted-foreground">约 {active.picked.charCount} 字</span>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="task-prompt" className="text-muted-foreground">
+                    自定义 Prompt（可空，空则转为 Markdown）
+                  </Label>
+                  <textarea
+                    id="task-prompt"
+                    value={active.taskPrompt}
+                    onChange={(e) => onTaskPrompt(e.target.value)}
+                    placeholder="例如：转成 Markdown；用三条要点总结"
+                    rows={3}
+                    className="placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input w-full min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+                  />
+                </div>
+              </div>
+            ) : active.regions.length > 0 ? (
               <div className="grid gap-1">
                 {active.regions.map((r) => (
                   <button
@@ -257,9 +302,9 @@ export function ConvertTabUI(props: {
                   </button>
                 ))}
               </div>
-            ) : phase === 'scanning' ? null : active.fromHistory && active.markdown ? (
+            ) : phase === 'scanning' || phase === 'picking' ? null : active.fromHistory && active.markdown ? (
               <p className="text-xs text-muted-foreground">
-                已加载历史转换结果（{REGION_LABELS[active.selected]}）。扫描当前页可重新选择区域。
+                已加载历史转换结果（{REGION_LABELS[active.selected] ?? '指定区域'}）。扫描当前页或指定区域可重新选择。
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">尚未扫描。</p>
@@ -370,7 +415,11 @@ export function ConvertTabUI(props: {
 
       <div className="shrink-0 border-t bg-gradient-to-t from-background to-card/40 p-3 backdrop-blur">
         <Button
-          disabled={!canConvert || active.regions.length === 0 || busy}
+          disabled={
+            !canConvert ||
+            busy ||
+            (active.selected === 'custom' ? !active.picked : active.regions.length === 0)
+          }
           onClick={onConvert}
           className={cn(
             'relative w-full overflow-hidden',

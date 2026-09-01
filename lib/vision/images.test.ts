@@ -61,6 +61,26 @@ describe('insertCaptions', () => {
       '![alt](https://example.com/a.png)\n\n> 图：架构图，分三层。\n>\n> - 上层：网关\n> - 下层：数据库',
     );
   });
+
+  it('matches urls that differ by query or markdown title', () => {
+    const md = '![ok](https://cdn.example.com/check.png?w=64 "ok")';
+    const out = insertCaptions(md, [
+      { url: 'https://cdn.example.com/check.png', text: '绿色对勾' },
+    ]);
+    expect(out).toContain('> 图：绿色对勾');
+  });
+
+  it('inserts after html img tags', () => {
+    const md = '<img src="https://example.com/a.png" alt="x">';
+    const out = insertCaptions(md, [{ url: 'https://example.com/a.png', text: '示意图' }]);
+    expect(out).toContain('<img src="https://example.com/a.png" alt="x">\n\n> 图：示意图');
+  });
+
+  it('appends captions when the markdown dropped the image', () => {
+    const md = '页面正文';
+    const out = insertCaptions(md, [{ url: 'https://example.com/check.png', text: '绿色圆形对勾' }]);
+    expect(out).toBe('页面正文\n\n> 图：绿色圆形对勾\n');
+  });
 });
 
 describe('formatCaptionBlock', () => {
