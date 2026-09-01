@@ -4,7 +4,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -192,57 +191,57 @@ export function ConvertTabUI(props: {
         ) : null}
 
         <Card className="gap-3 py-4">
-          <CardHeader className="px-4">
-            <CardTitle className="truncate">{active.pageTitle || '转换区域'}</CardTitle>
-            <CardDescription>
-              {active.selected === 'custom' && active.picked
-                ? '已选定页面元素，可填写任务说明后转换'
-                : '先扫描或指定区域，再转换'}
-            </CardDescription>
-            <CardAction>
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <Label htmlFor="highlight-toggle" className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Switch
-                    id="highlight-toggle"
-                    checked={highlightOn}
-                    disabled={phase === 'picking'}
-                    onCheckedChange={onToggleHighlight}
-                  />
-                  高亮
-                </Label>
-                <div className="flex flex-wrap justify-end gap-1.5">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={Boolean(active.unsupported) || busy}
-                    onClick={onScan}
-                  >
-                    <ScanSearch />
-                    {active.regions.length ? '重新扫描' : '扫描当前页'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={Boolean(active.unsupported) || busy}
-                    onClick={onPick}
-                  >
-                    <MousePointerClick />
-                    指定区域
-                  </Button>
-                  {phase === 'scanning' || phase === 'picking' || phase === 'converting' ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={phase === 'converting' ? onAbort : onCancelScan}
-                    >
-                      <X />
-                      取消
-                    </Button>
-                  ) : null}
-                </div>
+          <div className="flex flex-col gap-3 px-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1">
+                <CardTitle className="truncate">{active.pageTitle || '转换区域'}</CardTitle>
+                <CardDescription>
+                  {active.selected === 'custom' && active.picked
+                    ? '已选定页面元素，可填写任务说明后转换'
+                    : '先扫描或指定区域，再转换'}
+                </CardDescription>
               </div>
-            </CardAction>
-          </CardHeader>
+              <Label htmlFor="highlight-toggle" className="flex shrink-0 items-center gap-1.5 pt-0.5 text-xs text-muted-foreground">
+                <Switch
+                  id="highlight-toggle"
+                  checked={highlightOn}
+                  disabled={phase === 'picking'}
+                  onCheckedChange={onToggleHighlight}
+                />
+                高亮
+              </Label>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={Boolean(active.unsupported) || busy}
+                onClick={onScan}
+              >
+                <ScanSearch />
+                {active.regions.length ? '重新扫描' : '扫描当前页'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={Boolean(active.unsupported) || busy}
+                onClick={onPick}
+              >
+                <MousePointerClick />
+                指定区域
+              </Button>
+              {phase === 'scanning' || phase === 'picking' || phase === 'converting' ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={phase === 'converting' ? onAbort : onCancelScan}
+                >
+                  <X />
+                  取消
+                </Button>
+              ) : null}
+            </div>
+          </div>
           <CardContent className="px-4">
             {phase === 'scanning' ? (
               <ProgressBar label="扫描中…原页仍可滚动" value={0} indeterminate />

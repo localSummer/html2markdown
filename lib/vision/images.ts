@@ -1,6 +1,7 @@
 import type { ImageMeta } from '../messages';
 
 const MIN_SIZE = 64;
+export const VISION_MAX_EDGE = 1280;
 
 export function isDecorative(image: ImageMeta): boolean {
   if (image.role === 'presentation' || image.role === 'none') return true;
@@ -144,10 +145,19 @@ export function formatCaptionBlock(text: string): string {
     .join('\n');
 }
 
-export async function compressDataUrl(dataUrl: string, maxEdge = 1280, quality = 0.82): Promise<string> {
+export async function compressDataUrl(
+  dataUrl: string,
+  maxEdge = VISION_MAX_EDGE,
+  quality = 0.82,
+): Promise<string> {
   const blob = await (await fetch(dataUrl)).blob();
   const bitmap = await createImageBitmap(blob);
-  const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+  const maxDim = Math.max(bitmap.width, bitmap.height);
+  if (maxDim <= maxEdge && blob.type === 'image/jpeg') {
+    bitmap.close();
+    return dataUrl;
+  }
+  const scale = Math.min(1, maxEdge / maxDim);
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.round(bitmap.width * scale));
   canvas.height = Math.max(1, Math.round(bitmap.height * scale));

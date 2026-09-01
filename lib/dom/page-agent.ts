@@ -2,42 +2,71 @@ import { detectRegions } from './regions';
 import { clearHighlight, highlightElements, highlightRegion } from './highlight';
 import { cancelPicker, getPickedElement, startPicker } from './picker';
 import type { ExtensionMessage, ExtensionResponse } from '../messages';
-import { blobToDataUrl } from '../vision/fetch';
+import {
+  blobToDataUrl,
+  FETCH_CONCURRENCY,
+  FETCH_TIMEOUT_MS,
+  mapPool,
+  mergeAbortSignal,
+} from '../vision/fetch';
+import { VISION_MAX_EDGE } from '../vision/images';
 
-async function dataUrlFromImgElement(url: string): Promise<string | null> {
-  const img = Array.from(document.images).find((el) => el.currentSrc === url || el.src === url);
-  if (!img || img.naturalWidth < 1 || img.naturalHeight < 1) return null;
+function indexPageImages(): Map<string, HTMLImageElement> {
+  const map = new Map<string, HTMLImageElement>();
+  for (const img of document.images) {
+    if (img.currentSrc) map.set(img.currentSrc, img);
+    if (img.src) map.set(img.src, img);
+  }
+  return map;
+}
+
+function dataUrlFromImg(img: HTMLImageElement): string | null {
+  if (img.naturalWidth < 1 || img.naturalHeight < 1) return null;
   try {
+    const scale = Math.min(1, VISION_MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
     const canvas = document.createElement('canvas');
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
-    ctx.drawImage(img, 0, 0);
-    return canvas.toDataURL('image/jpeg', 0.92);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.82);
   } catch {
     return null;
   }
 }
 
 async function fetchImageDataUrls(urls: string[]): Promise<{ url: string; dataUrl: string }[]> {
-  const out: { url: string; dataUrl: string }[] = [];
+  const index = indexPageImages();
+  const got: { url: string; dataUrl: string }[] = [];
+  const missing: string[] = [];
   for (const url of urls) {
-    const fromDom = await dataUrlFromImgElement(url);
-    if (fromDom) {
-      out.push({ url, dataUrl: fromDom });
+    if (url.startsWith('data:')) {
+      got.push({ url, dataUrl: url });
       continue;
     }
-    try {
-      const res = await fetch(url, { credentials: 'include' });
-      if (!res.ok) continue;
-      const blob = await res.blob();
-      out.push({ url, dataUrl: await blobToDataUrl(blob) });
-    } catch {
-      /* skip */
-    }
+    const img = index.get(url);
+    const fromDom = img ? dataUrlFromImg(img) : null;
+    if (fromDom) got.push({ url, dataUrl: fromDom });
+    else missing.push(url);
   }
-  return out;
+  if (missing.length === 0) return got;
+  const extras = await mapPool(missing, FETCH_CONCURRENCY, async (url) => {
+    try {
+      const res = await fetch(url, {
+        credentials: 'include',
+        signal: mergeAbortSignal(undefined, FETCH_TIMEOUT_MS),
+      });
+      if (!res.ok) return null;
+      return { url, dataUrl: await blobToDataUrl(await res.blob()) };
+    } catch {
+      return null;
+    }
+  });
+  for (const item of extras) {
+    if (item) got.push(item);
+  }
+  return got;
 }
 
 export async function handlePageMessage(message: ExtensionMessage): Promise<ExtensionResponse> {
