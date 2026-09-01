@@ -149,7 +149,10 @@ function serializeNode(node: Node, baseUrl: string): string {
   const attrs: string[] = [];
   const allowed = ALLOWED_ATTR[el.tagName] ?? [];
   for (const name of allowed) {
-    const raw = el.getAttribute(name);
+    let raw = el.getAttribute(name);
+    if (el.tagName === 'IMG' && name === 'src') {
+      raw = el.getAttribute('data-src') || el.getAttribute('data-original') || raw;
+    }
     if (!raw) continue;
     const value = name === 'href' || name === 'src' ? resolveUrl(baseUrl, raw) : raw;
     if (!value) continue;

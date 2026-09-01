@@ -1,4 +1,4 @@
-import { detectRegions, findMainElement, liveRootsFor } from './regions';
+import { collectImages, collectImagesFromHtml, detectRegions, findMainElement, liveRootsFor } from './regions';
 
 function parse(html: string): Document {
   return new DOMParser().parseFromString(html, 'text/html');
@@ -86,5 +86,38 @@ describe('liveRootsFor', () => {
   it('returns no roots for a custom pick', () => {
     const doc = parse(`<article><p>${LONG_TEXT}</p></article>`);
     expect(liveRootsFor(doc, 'custom')).toEqual([]);
+  });
+});
+
+describe('collectImages', () => {
+  it('prefers lazy data-src over placeholder src', () => {
+    const doc = parse(`<img src="/placeholder.gif" data-src="/hero.png" width="800" height="450">`);
+    const images = collectImages(doc.body, 'https://example.com/page');
+    expect(images.map((i) => i.src)).toEqual(['https://example.com/hero.png']);
+  });
+});
+
+describe('collectImagesFromHtml', () => {
+  it('keeps images from converted html and copies live sizes', () => {
+    const html = '<p>正文</p><img src="https://cdn.example.com/chart.png" alt="chart">';
+    const live = [
+      {
+        src: 'https://cdn.example.com/chart.png',
+        alt: 'chart',
+        width: 900,
+        height: 500,
+        role: null,
+      },
+      {
+        src: 'https://example.com/check.png',
+        alt: '',
+        width: 80,
+        height: 80,
+        role: null,
+      },
+    ];
+    const images = collectImagesFromHtml(html, 'https://example.com/', live);
+    expect(images.map((i) => i.src)).toEqual(['https://cdn.example.com/chart.png']);
+    expect(images[0]?.width).toBe(900);
   });
 });

@@ -1,4 +1,5 @@
 import type { ImageMeta, RegionSummary, RegionType } from '../messages';
+import { isDecorative } from '../vision/images';
 
 export function findNavElements(doc: Document): Element[] {
   return Array.from(doc.querySelectorAll('nav, [role="navigation"]'));
@@ -78,15 +79,6 @@ function charCount(el: Element | null): number {
   return (el?.textContent ?? '').replace(/\s+/g, ' ').trim().length;
 }
 
-function isDecorativeMeta(image: ImageMeta): boolean {
-  if (image.role === 'presentation' || image.role === 'none') return true;
-  const w = image.width;
-  const h = image.height;
-  if (w > 0 && h > 0 && (w <= 1 || h <= 1)) return true;
-  if (w > 0 && h > 0 && w < 64 && h < 64) return true;
-  return false;
-}
-
 function imageStatsFrom(
   roots: Element[],
   baseUrl: string,
@@ -94,7 +86,7 @@ function imageStatsFrom(
   const images = roots.flatMap((el) => collectImages(el, baseUrl));
   return {
     imageTotal: images.length,
-    imageDecorative: images.filter(isDecorativeMeta).length,
+    imageDecorative: images.filter(isDecorative).length,
   };
 }
 
@@ -159,27 +151,88 @@ export function liveRootsFor(doc: Document, type: RegionType): Element[] {
   return [findMainElement(doc), ...findNavElements(doc)];
 }
 
+function rawImageSrc(img: Element): string {
+  return (
+    img.getAttribute('data-src') ||
+    img.getAttribute('data-original') ||
+    (img instanceof HTMLImageElement ? img.currentSrc : '') ||
+    img.getAttribute('src') ||
+    ''
+  );
+}
+
+function resolveSrc(raw: string, baseUrl: string): string {
+  try {
+    return new URL(raw, baseUrl).href;
+  } catch {
+    return raw;
+  }
+}
+
+export function mergeImageMeta(primary: ImageMeta[], live: ImageMeta[]): ImageMeta[] {
+  const bySrc = new Map(live.map((img) => [img.src, img]));
+  const byPath = new Map<string, ImageMeta>();
+  for (const img of live) {
+    try {
+      byPath.set(new URL(img.src).pathname, img);
+    } catch {
+      /* ignore */
+    }
+  }
+  return primary.map((img) => {
+    let match = bySrc.get(img.src);
+    if (!match) {
+      try {
+        match = byPath.get(new URL(img.src).pathname);
+      } catch {
+        match = undefined;
+      }
+    }
+    if (!match) return img;
+    return {
+      ...img,
+      width: img.width || match.width,
+      height: img.height || match.height,
+      role: img.role ?? match.role,
+      alt: img.alt || match.alt,
+    };
+  });
+}
+
 export function collectImages(root: Element, baseUrl: string): ImageMeta[] {
   const seen = new Set<string>();
   const out: ImageMeta[] = [];
   for (const img of Array.from(root.querySelectorAll('img'))) {
-    const raw = img.getAttribute('src') || img.currentSrc || '';
+    const raw = rawImageSrc(img);
     if (!raw) continue;
-    let src = raw;
-    try {
-      src = new URL(raw, baseUrl).href;
-    } catch {
-      /* keep raw */
-    }
+    const src = resolveSrc(raw, baseUrl);
     if (seen.has(src)) continue;
     seen.add(src);
     out.push({
       src,
       alt: img.getAttribute('alt') ?? '',
-      width: img.naturalWidth || img.width || Number(img.getAttribute('width')) || 0,
-      height: img.naturalHeight || img.height || Number(img.getAttribute('height')) || 0,
+      width:
+        (img instanceof HTMLImageElement ? img.naturalWidth || img.width : 0) ||
+        Number(img.getAttribute('width')) ||
+        0,
+      height:
+        (img instanceof HTMLImageElement ? img.naturalHeight || img.height : 0) ||
+        Number(img.getAttribute('height')) ||
+        0,
       role: img.getAttribute('role'),
     });
   }
   return out;
+}
+
+export function collectImagesFromHtml(
+  html: string,
+  baseUrl: string,
+  live: ImageMeta[] = [],
+): ImageMeta[] {
+  const doc = new DOMParser().parseFromString(
+    `<!DOCTYPE html><html><body>${html}</body></html>`,
+    'text/html',
+  );
+  return mergeImageMeta(collectImages(doc.body, baseUrl), live);
 }

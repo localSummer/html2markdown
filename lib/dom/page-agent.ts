@@ -2,30 +2,42 @@ import { detectRegions } from './regions';
 import { clearHighlight, highlightElements, highlightRegion } from './highlight';
 import { cancelPicker, getPickedElement, startPicker } from './picker';
 import type { ExtensionMessage, ExtensionResponse } from '../messages';
+import { blobToDataUrl } from '../vision/fetch';
+
+async function dataUrlFromImgElement(url: string): Promise<string | null> {
+  const img = Array.from(document.images).find((el) => el.currentSrc === url || el.src === url);
+  if (!img || img.naturalWidth < 1 || img.naturalHeight < 1) return null;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0);
+    return canvas.toDataURL('image/jpeg', 0.92);
+  } catch {
+    return null;
+  }
+}
 
 async function fetchImageDataUrls(urls: string[]): Promise<{ url: string; dataUrl: string }[]> {
   const out: { url: string; dataUrl: string }[] = [];
   for (const url of urls) {
+    const fromDom = await dataUrlFromImgElement(url);
+    if (fromDom) {
+      out.push({ url, dataUrl: fromDom });
+      continue;
+    }
     try {
       const res = await fetch(url, { credentials: 'include' });
       if (!res.ok) continue;
       const blob = await res.blob();
-      const dataUrl = await blobToDataUrl(blob);
-      out.push({ url, dataUrl });
+      out.push({ url, dataUrl: await blobToDataUrl(blob) });
     } catch {
       /* skip */
     }
   }
   return out;
-}
-
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
 }
 
 export async function handlePageMessage(message: ExtensionMessage): Promise<ExtensionResponse> {

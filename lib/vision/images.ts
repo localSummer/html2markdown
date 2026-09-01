@@ -25,7 +25,10 @@ export function selectVisionImages(
   images: ImageMeta[],
   max: number,
 ): { selected: ImageMeta[]; skipped: number; truncated: number } {
-  const useful = images.filter((img) => !isDecorative(img));
+  const useful = images
+    .filter((img) => !isDecorative(img))
+    .slice()
+    .sort((a, b) => b.width * b.height - a.width * a.height);
   const skipped = images.length - useful.length;
   const selected = useful.slice(0, max);
   const truncated = Math.max(0, useful.length - selected.length);
@@ -77,11 +80,15 @@ function collectImageSlots(markdown: string): ImageSlot[] {
   const mdRe = /!\[([^\]]*)\]\((?:<)?([^)\s>]+)(?:>)?(?:\s+"[^"]*")?\)/g;
   let match: RegExpExecArray | null;
   while ((match = mdRe.exec(markdown))) {
-    slots.push({ start: match.index, end: match.index + match[0].length, url: match[2] });
+    if (match[2]) {
+      slots.push({ start: match.index, end: match.index + match[0].length, url: match[2] });
+    }
   }
   const htmlRe = /<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*\/?>/gi;
   while ((match = htmlRe.exec(markdown))) {
-    slots.push({ start: match.index, end: match.index + match[0].length, url: match[1] });
+    if (match[1]) {
+      slots.push({ start: match.index, end: match.index + match[0].length, url: match[1] });
+    }
   }
   slots.sort((a, b) => a.start - b.start);
   return slots;
@@ -105,8 +112,10 @@ export function insertCaptions(
       leftovers.push(block);
       continue;
     }
+    const slot = slots[idx];
+    if (!slot) continue;
     used.add(idx);
-    insertions.push({ at: slots[idx].end, block });
+    insertions.push({ at: slot.end, block });
   }
 
   insertions.sort((a, b) => b.at - a.at);

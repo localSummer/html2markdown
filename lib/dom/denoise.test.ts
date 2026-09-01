@@ -23,6 +23,13 @@ describe('cleanClone', () => {
     expect(html).toContain('alt="pic"');
   });
 
+  it('rewrites lazy data-src onto src', () => {
+    const doc = parse(`<img data-src="https://cdn.example.com/hero.png" src="/placeholder.gif" alt="hero">`);
+    const html = cleanClone(doc.body, 'https://example.com/');
+    expect(html).toContain('src="https://cdn.example.com/hero.png"');
+    expect(html).not.toContain('placeholder.gif');
+  });
+
   it('turns iframe into a link', () => {
     const doc = parse(`<p>x</p><iframe src="https://example.com/embed"></iframe>`);
     const html = cleanClone(doc.body, 'https://example.com/');

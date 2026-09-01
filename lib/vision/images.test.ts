@@ -40,6 +40,15 @@ describe('selectVisionImages', () => {
       'https://example.com/2.png',
     ]);
   });
+
+  it('prefers larger content images over leftover icons', () => {
+    const images = [
+      img({ src: 'https://example.com/check.png', width: 80, height: 80 }),
+      img({ src: 'https://example.com/hero.png', width: 800, height: 450 }),
+    ];
+    const { selected } = selectVisionImages(images, 1);
+    expect(selected.map((i) => i.src)).toEqual(['https://example.com/hero.png']);
+  });
 });
 
 describe('insertCaptions', () => {

@@ -4,6 +4,7 @@ import { addRecord, findLatestByUrl } from '../../../lib/history/db';
 import { convertHtmlToMarkdown } from '../../../lib/llm/convert';
 import { chatCompletions } from '../../../lib/llm/client';
 import { assertWithinLimit, VISION_IMAGE_PROMPT } from '../../../lib/llm/prompt';
+import { collectImagesFromHtml } from '../../../lib/dom/regions';
 import { refineReadableHtml } from '../../../lib/dom/readability';
 import type { ImageMeta, RegionType } from '../../../lib/messages';
 import { getUnsupportedReason } from '../../../lib/page-support';
@@ -15,6 +16,7 @@ import {
   insertCaptions,
   selectVisionImages,
 } from '../../../lib/vision/images';
+import { fetchVisionImages } from '../../../lib/vision/fetch';
 import { ConvertTabUI } from './ConvertTabUI.tsx';
 import { FRESH_STATE, type Phase, type TabState } from './convert-types.ts';
 
@@ -413,16 +415,28 @@ export function ConvertTab({
   };
 
   const runVision = async (htmlImages: ImageMeta[], md: string, signal: AbortSignal) => {
-    const { selected: picked } = selectVisionImages(htmlImages, settings.visionMaxImages);
-    if (picked.length === 0) return md;
-    const fetched = await sendToTab(id, { type: 'FETCH_IMAGES', urls: picked.map((i) => i.src) });
-    if (!fetched.ok || !('images' in fetched) || 'html' in fetched) return md;
+    const { selected: picked, skipped } = selectVisionImages(htmlImages, settings.visionMaxImages);
+    const hint = formatVisionHint(htmlImages.length, skipped, settings.visionMaxImages);
+    if (picked.length === 0) {
+      patchState(id, { visionHint: hint });
+      return md;
+    }
+    patchState(id, { visionHint: hint, status: `正在获取 ${picked.length} 张图片…` });
+    const { images: fetched, fetchFailed } = await fetchVisionImages(
+      picked.map((img) => img.src),
+      async (urls) => {
+        const res = await sendToTab(id, { type: 'FETCH_IMAGES', urls });
+        if (!res.ok || !('images' in res) || 'html' in res) return [];
+        return res.images;
+      },
+      signal,
+    );
     const captions: Array<{ url: string; text: string }> = [];
-    let failed = 0;
+    let failed = fetchFailed;
     const key = resolveVisionApiKey(settings);
-    const total = fetched.images.length;
+    const total = fetched.length;
     let done = 0;
-    for (const image of fetched.images) {
+    for (const image of fetched) {
       if (signal.aborted) throw new DOMException('已取消', 'AbortError');
       patchState(id, {
         status: `正在识别图片 ${done + 1}/${total}…`,
@@ -452,7 +466,12 @@ export function ConvertTab({
       }
       done += 1;
     }
-    if (failed) patchState(id, { visionHint: `${active.visionHint}。${failed} 张未识别` });
+    if (failed) {
+      const extra = fetchFailed
+        ? `${fetchFailed} 张拉取失败${failed > fetchFailed ? `，${failed - fetchFailed} 张未识别` : ''}`
+        : `${failed} 张未识别`;
+      patchState(id, { visionHint: `${hint}。${extra}` });
+    }
     return insertCaptions(md, captions);
   };
 
@@ -524,8 +543,13 @@ export function ConvertTab({
       });
       let finalMd = md;
       if (settings.visionEnabled) {
+        const visionImages = collectImagesFromHtml(
+          html,
+          active.tabUrl || extracted.title,
+          extracted.images,
+        );
         patchState(id, { status: '正在识别图片…', progress: 86 });
-        finalMd = await runVision(extracted.images, md, ac.signal);
+        finalMd = await runVision(visionImages, md, ac.signal);
         patchState(id, { markdown: finalMd, progress: 96 });
       }
       await addRecord(
