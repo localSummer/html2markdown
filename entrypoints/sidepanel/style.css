@@ -1,0 +1,228 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@plugin '@tailwindcss/typography';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --html2md-md-font: 14px;
+  --radius: 0.75rem;
+  --background: oklch(0.99 0.004 155);
+  --foreground: oklch(0.26 0.03 160);
+  --card: oklch(0.995 0.003 155);
+  --card-foreground: oklch(0.26 0.03 160);
+  --popover: oklch(0.995 0.003 155);
+  --popover-foreground: oklch(0.26 0.03 160);
+  --primary: oklch(0.60 0.16 160);
+  --primary-foreground: oklch(0.99 0.02 160);
+  --primary-soft: oklch(0.95 0.03 160);
+  --primary-soft-foreground: oklch(0.42 0.12 160);
+  --secondary: oklch(0.96 0.018 170);
+  --secondary-foreground: oklch(0.38 0.09 165);
+  --muted: oklch(0.965 0.005 160);
+  --muted-foreground: oklch(0.52 0.02 160);
+  --accent: oklch(0.94 0.04 165);
+  --accent-foreground: oklch(0.38 0.11 165);
+  --destructive: oklch(0.62 0.24 25);
+  --destructive-soft: oklch(0.95 0.04 25);
+  --border: oklch(0.91 0.012 165);
+  --input: oklch(0.91 0.012 165);
+  --ring: oklch(0.60 0.16 160);
+}
+
+.dark {
+  --background: oklch(0.19 0.02 160);
+  --foreground: oklch(0.96 0.008 160);
+  --card: oklch(0.24 0.025 160);
+  --card-foreground: oklch(0.96 0.008 160);
+  --popover: oklch(0.24 0.025 160);
+  --popover-foreground: oklch(0.96 0.008 160);
+  --primary: oklch(0.72 0.15 160);
+  --primary-foreground: oklch(0.18 0.04 160);
+  --primary-soft: oklch(0.30 0.06 160);
+  --primary-soft-foreground: oklch(0.85 0.07 160);
+  --secondary: oklch(0.30 0.04 170);
+  --secondary-foreground: oklch(0.92 0.02 165);
+  --muted: oklch(0.28 0.02 160);
+  --muted-foreground: oklch(0.70 0.025 162);
+  --accent: oklch(0.32 0.07 165);
+  --accent-foreground: oklch(0.90 0.04 165);
+  --destructive: oklch(0.70 0.20 25);
+  --destructive-soft: oklch(0.32 0.07 25);
+  --border: oklch(0.36 0.03 165 / 60%);
+  --input: oklch(0.36 0.03 165 / 80%);
+  --ring: oklch(0.72 0.15 160);
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-soft-foreground: var(--primary-soft-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+}
+
+.prose {
+  --tw-prose-body: var(--foreground);
+  --tw-prose-headings: var(--foreground);
+  --tw-prose-links: var(--primary);
+  --tw-prose-bold: var(--foreground);
+  --tw-prose-code: var(--primary-soft-foreground);
+  --tw-prose-pre-bg: var(--primary-soft);
+  --tw-prose-pre-code: var(--foreground);
+  --tw-prose-quotes: var(--muted-foreground);
+  --tw-prose-quote-borders: var(--primary);
+  --tw-prose-th-borders: var(--border);
+  --tw-prose-td-borders: var(--border);
+}
+
+@keyframes html2md-progress-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+
+.html2md-progress-indeterminate {
+  width: 40%;
+  animation: html2md-progress-slide 1.15s ease-in-out infinite;
+}
+
+.html2md-expand {
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  transition: grid-template-rows 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.html2md-expand[data-open='true'] {
+  grid-template-rows: 1fr;
+}
+.html2md-expand-inner {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    opacity 0.22s ease,
+    transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.html2md-expand[data-open='true'] .html2md-expand-inner {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.html2md-view-swap {
+  position: relative;
+}
+.html2md-view {
+  transition: opacity 0.22s ease;
+}
+.html2md-view[data-active='false'] {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.html2md-tab-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(to right, color-mix(in oklab, var(--primary) 60%, transparent), var(--primary), color-mix(in oklab, var(--primary) 60%, transparent));
+  box-shadow: 0 0 6px var(--primary);
+  pointer-events: none;
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.html2md-tab-panel {
+  height: 100%;
+  min-height: 0;
+  transition: opacity 0.22s ease;
+}
+.html2md-tab-panel[data-active='false'] {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+.html2md-tab-panel[data-active='true'] {
+  position: relative;
+  z-index: 1;
+  opacity: 1;
+}
+
+/* 上下留白在外框上固定，内部再滚，滚动中也不会贴边 */
+.html2md-scroll {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding-block: 0.75rem;
+}
+.html2md-scroll-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.html2md-md ::selection {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.html2md-md-prose.prose {
+  font-size: var(--html2md-md-font);
+}
+
+.html2md-md-source {
+  margin: 0;
+  font-size: var(--html2md-md-font);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .html2md-expand,
+  .html2md-expand-inner,
+  .html2md-view,
+  .html2md-tab-indicator,
+  .html2md-tab-panel {
+    transition: none;
+  }
+}

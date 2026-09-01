@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bg" x1="18" y1="12" x2="110" y2="116" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00a461"/>
+      <stop offset="1" stop-color="#008149"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="64" y1="8" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#bg)"/>
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#sheen)"/>
+  <!-- Bold M, optically centered; same mark as the sidepanel header -->
+  <path fill="#f1fff7" d="M36 30h16.5L64 58l11.5-28H92v68h-16V54L64 82 52 54v44H36V30z"/>
+</svg>
