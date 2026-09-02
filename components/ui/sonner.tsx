@@ -18,6 +18,7 @@ export function Toaster({ theme = 'system', ...props }: ToasterProps) {
       mobileOffset={12}
       duration={2200}
       visibleToasts={3}
+      richColors
       icons={{
         success: <CircleCheckIcon className="size-4" />,
         info: <InfoIcon className="size-4" />,
@@ -38,3 +39,4 @@ export function Toaster({ theme = 'system', ...props }: ToasterProps) {
     />
   );
 }
+

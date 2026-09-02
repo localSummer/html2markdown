@@ -217,6 +217,20 @@ body {
   font-size: var(--html2md-md-font);
 }
 
+/* 盖过 Sonner 按 light/dark 写死的色板，接到侧栏 token */
+.toaster[data-sonner-toaster][data-sonner-theme] {
+  --normal-bg: var(--popover);
+  --normal-text: var(--popover-foreground);
+  --normal-border: var(--border);
+  --border-radius: var(--radius);
+  --success-bg: var(--primary-soft);
+  --success-border: color-mix(in oklab, var(--primary) 40%, var(--border));
+  --success-text: var(--primary-soft-foreground);
+  --error-bg: var(--destructive-soft);
+  --error-border: color-mix(in oklab, var(--destructive) 40%, var(--border));
+  --error-text: var(--destructive);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .html2md-expand,
   .html2md-expand-inner,
