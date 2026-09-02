@@ -84,6 +84,7 @@ export function ConvertTab({
   const [aiWanted, setAiWanted] = useState(false);
   const refsRef = useRef<Map<number, TabRefs>>(new Map());
   const prevActiveRef = useRef<number | undefined>(undefined);
+  const paintHighlightOnScanRef = useRef(true);
   const scanRef = useRef<(opts?: { auto?: boolean }) => Promise<void>>(async () => {});
   const activeTabIdRef = useRef<number | undefined>(undefined);
   const syncedUrlRef = useRef<string | undefined>(undefined);
@@ -190,6 +191,7 @@ export function ConvertTab({
   const restoreFor = useCallback(
     (tabId: number) => {
       const r = getRefs(tabId);
+      const wasAuto = r.autoScan;
       r.inflight = null;
       r.autoScan = false;
       const snap = r.sessionSnap;
@@ -209,7 +211,8 @@ export function ConvertTab({
       }
       patchState(tabId, { ...snap, status: '', error: '', progress: 0 });
       const region = snap.picked ? 'custom' : snap.regions.length ? snap.selected : null;
-      if (!highlightOn || region === null) {
+      const paint = highlightOn && region !== null && (!wasAuto || paintHighlightOnScanRef.current);
+      if (!paint) {
         void sendToTab(tabId, { type: 'CLEAR_HIGHLIGHT' }).catch(() => {});
       } else {
         void sendToTab(tabId, { type: 'HIGHLIGHT', region }).catch(() => {});
@@ -318,12 +321,10 @@ export function ConvertTab({
     const prev = prevActiveRef.current;
     if (prev !== undefined && prev !== activeTabId) {
       void sendToTab(prev, { type: 'CLEAR_HIGHLIGHT' }).catch(() => {});
-    }
-    if (highlightOn && activeTabId !== undefined && active && (active.regions.length > 0 || active.selected === 'custom')) {
-      void sendToTab(activeTabId, { type: 'HIGHLIGHT', region: active.selected }).catch(() => {});
+      // 切走后不要把高亮画到新 tab；自动扫描也不再铺一层
+      paintHighlightOnScanRef.current = false;
     }
     prevActiveRef.current = activeTabId;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTabId]);
 
   useEffect(() => {
@@ -469,7 +470,9 @@ export function ConvertTab({
         progress: 0,
         ...(keepPreview ? {} : { markdown: '', fromHistory: false, visionHint: '' }),
       });
-      await highlight(selected);
+      if (!auto || paintHighlightOnScanRef.current) {
+        await highlight(selected);
+      }
     } catch (err) {
       if (gen !== refs.scanGen) return;
       const msg = err instanceof Error ? err.message : String(err);
