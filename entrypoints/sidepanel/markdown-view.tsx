@@ -178,6 +178,7 @@ export function MarkdownScrollBox({
   maxHeightClass?: string;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
   const skipRef = useRef(false);
   const [shot, setShot] = useState<Shot | null>(null);
@@ -196,6 +197,24 @@ export function MarkdownScrollBox({
       skipRef.current = false;
     });
   }, [markdown, converting, previewMode]);
+
+  useEffect(() => {
+    if (!converting) return;
+    const content = contentRef.current;
+    if (!content) return;
+    const ro = new ResizeObserver(() => {
+      if (!stickRef.current) return;
+      const el = boxRef.current;
+      if (!el) return;
+      skipRef.current = true;
+      el.scrollTop = el.scrollHeight;
+      requestAnimationFrame(() => {
+        skipRef.current = false;
+      });
+    });
+    ro.observe(content);
+    return () => ro.disconnect();
+  }, [converting]);
 
   return (
     <>
@@ -219,7 +238,7 @@ export function MarkdownScrollBox({
           }}
           className="html2md-scroll-body"
         >
-          <div className="px-4">
+          <div ref={contentRef} className="px-4">
             <div className="html2md-view-swap">
               <div className="html2md-view" data-active={previewMode === 'preview' ? 'true' : 'false'}>
                 <MarkdownPreview markdown={markdown} onOpenImage={setShot} />
