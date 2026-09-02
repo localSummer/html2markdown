@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { copyText, downloadMarkdown } from '../../../lib/export';
-import { addRecord, findLatestByUrl } from '../../../lib/history/db';
+import { copyText, downloadMarkdown, withSourceMeta } from '../../../lib/export';
+import { addRecord, canonicalUrl, findLatestByUrl } from '../../../lib/history/db';
 import { convertHtmlToMarkdown } from '../../../lib/llm/convert';
 import { chatCompletions } from '../../../lib/llm/client';
 import { assertWithinLimit, VISION_IMAGE_PROMPT } from '../../../lib/llm/prompt';
@@ -29,7 +29,20 @@ type TabRefs = {
   paintTimer: ReturnType<typeof setTimeout> | null;
   sessionSnap: SessionSnap | null;
   inflight: 'scan' | 'pick' | null;
+  scannedUrl: string;
+  autoScanBlocked: boolean;
+  autoScan: boolean;
 };
+
+function pickScanSelected(
+  regions: Array<{ id: RegionType }>,
+  prev: RegionType,
+  picked: TabState['picked'],
+): RegionType {
+  if (prev === 'custom' && !picked) return regions[0]?.id ?? 'full';
+  if (regions.some((r) => r.id === prev)) return prev;
+  return regions[0]?.id ?? 'full';
+}
 
 function captureSession(s: TabState, dropCustom: boolean): SessionSnap {
   if (dropCustom && (s.selected === 'custom' || s.picked)) {
@@ -57,23 +70,42 @@ function captureSession(s: TabState, dropCustom: boolean): SessionSnap {
 export function ConvertTab({
   settings,
   onOpenSettings,
+  active: tabVisible = true,
 }: {
   settings: Settings;
   onOpenSettings: () => void;
+  active?: boolean;
 }) {
   const [activeTabId, setActiveTabId] = useState<number | undefined>();
   const [states, setStates] = useState<Record<number, TabState>>({});
   const [previewMode, setPreviewMode] = useState<'preview' | 'source'>('preview');
   const [highlightOn, setHighlightOn] = useState(true);
+  const [aiWanted, setAiWanted] = useState(false);
   const refsRef = useRef<Map<number, TabRefs>>(new Map());
   const prevActiveRef = useRef<number | undefined>(undefined);
+  const scanRef = useRef<(opts?: { auto?: boolean }) => Promise<void>>(async () => {});
+  const activeTabIdRef = useRef<number | undefined>(undefined);
+  const syncedUrlRef = useRef<string | undefined>(undefined);
+  const hydrateBusyRef = useRef(0);
+  const [hydrateGate, setHydrateGate] = useState(0);
 
   const active = activeTabId !== undefined ? states[activeTabId] : undefined;
+  activeTabIdRef.current = activeTabId;
 
   const getRefs = useCallback((id: number): TabRefs => {
     let r = refsRef.current.get(id);
     if (!r) {
-      r = { markdown: '', abort: null, scanGen: 0, paintTimer: null, sessionSnap: null, inflight: null };
+      r = {
+        markdown: '',
+        abort: null,
+        scanGen: 0,
+        paintTimer: null,
+        sessionSnap: null,
+        inflight: null,
+        scannedUrl: '',
+        autoScanBlocked: false,
+        autoScan: false,
+      };
       refsRef.current.set(id, r);
     }
     return r;
@@ -92,6 +124,9 @@ export function ConvertTab({
       r.markdown = '';
       r.sessionSnap = null;
       r.inflight = null;
+      r.scannedUrl = '';
+      r.autoScanBlocked = false;
+      r.autoScan = false;
       if (r.paintTimer != null) {
         clearTimeout(r.paintTimer);
         r.paintTimer = null;
@@ -116,33 +151,70 @@ export function ConvertTab({
 
   const hydrateFromHistory = useCallback(
     async (id: number, url: string | undefined) => {
-      if (!url) return;
-      const rec = await findLatestByUrl(url);
-      if (!rec) return;
-      setStates((prev) => {
-        const cur = prev[id];
-        if (!cur || cur.tabUrl !== url) return prev;
-        if (cur.phase === 'scanning' || cur.phase === 'converting' || cur.phase === 'picking') return prev;
-        if (cur.regions.length > 0 || cur.picked || (cur.markdown && !cur.fromHistory)) return prev;
-        const r = getRefs(id);
-        r.markdown = rec.markdown;
-        return {
-          ...prev,
-          [id]: {
-            ...cur,
-            pageTitle: rec.title || cur.pageTitle,
-            markdown: rec.markdown,
-            selected: rec.regionType,
-            phase: 'done',
-            status: '',
-            error: '',
-            progress: 0,
-            fromHistory: true,
-          },
-        };
-      });
+      hydrateBusyRef.current += 1;
+      try {
+        if (!url) return;
+        const rec = await findLatestByUrl(url);
+        if (!rec) return;
+        setStates((prev) => {
+          const cur = prev[id];
+          if (!cur || cur.tabUrl !== url) return prev;
+          if (cur.phase === 'scanning' || cur.phase === 'converting' || cur.phase === 'picking') return prev;
+          if (cur.regions.length > 0 || cur.picked || (cur.markdown && !cur.fromHistory)) return prev;
+          const r = getRefs(id);
+          r.markdown = rec.markdown;
+          return {
+            ...prev,
+            [id]: {
+              ...cur,
+              pageTitle: rec.title || cur.pageTitle,
+              markdown: rec.markdown,
+              selected: rec.regionType,
+              phase: 'done',
+              status: '',
+              error: '',
+              progress: 0,
+              fromHistory: true,
+            },
+          };
+        });
+      } finally {
+        hydrateBusyRef.current -= 1;
+        setHydrateGate((n) => n + 1);
+      }
     },
     [getRefs],
+  );
+
+  const restoreFor = useCallback(
+    (tabId: number) => {
+      const r = getRefs(tabId);
+      r.inflight = null;
+      r.autoScan = false;
+      const snap = r.sessionSnap;
+      r.sessionSnap = null;
+      if (!snap) {
+        patchState(tabId, {
+          phase: 'idle',
+          status: '',
+          error: '',
+          regions: [],
+          picked: null,
+          selected: 'main',
+          progress: 0,
+        });
+        void sendToTab(tabId, { type: 'CLEAR_HIGHLIGHT' }).catch(() => {});
+        return;
+      }
+      patchState(tabId, { ...snap, status: '', error: '', progress: 0 });
+      const region = snap.picked ? 'custom' : snap.regions.length ? snap.selected : null;
+      if (!highlightOn || region === null) {
+        void sendToTab(tabId, { type: 'CLEAR_HIGHLIGHT' }).catch(() => {});
+      } else {
+        void sendToTab(tabId, { type: 'HIGHLIGHT', region }).catch(() => {});
+      }
+    },
+    [getRefs, patchState, highlightOn],
   );
 
   useEffect(() => {
@@ -167,7 +239,10 @@ export function ConvertTab({
           r.abort = null;
           r.markdown = '';
           r.sessionSnap = null;
-      r.inflight = null;
+          r.inflight = null;
+          r.scannedUrl = '';
+          r.autoScanBlocked = false;
+          r.autoScan = false;
           if (r.paintTimer != null) {
             clearTimeout(r.paintTimer);
             r.paintTimer = null;
@@ -191,6 +266,10 @@ export function ConvertTab({
         return { ...prev, [nextId]: nextEntry };
       });
       setActiveTabId(nextId);
+      if (nextUrl !== syncedUrlRef.current) {
+        syncedUrlRef.current = nextUrl;
+        setAiWanted(false);
+      }
       void hydrateFromHistory(nextId, nextUrl);
     };
     void sync();
@@ -200,6 +279,8 @@ export function ConvertTab({
         resetTabScan(id);
         void getActiveTab().then((t) => {
           if (t?.id === id) {
+            syncedUrlRef.current = t.url;
+            if (id === activeTabIdRef.current) setAiWanted(false);
             patchState(id, {
               tabUrl: t.url,
               pageTitle: t.title ?? '',
@@ -209,6 +290,7 @@ export function ConvertTab({
           }
         });
       } else if (info.status === 'complete') {
+        getRefs(id).autoScanBlocked = false;
         void sync();
       }
     };
@@ -243,6 +325,38 @@ export function ConvertTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTabId]);
 
+  useEffect(() => {
+    if (!tabVisible || activeTabId === undefined || !active) return;
+    if (hydrateBusyRef.current > 0) return;
+    if (active.unsupported) return;
+    if (active.phase === 'scanning' || active.phase === 'picking' || active.phase === 'converting') return;
+    if (active.regions.length > 0 || active.picked) return;
+    const url = active.tabUrl;
+    if (!url) return;
+    const r = getRefs(activeTabId);
+    if (r.inflight || r.autoScanBlocked) return;
+    if (r.scannedUrl === canonicalUrl(url)) return;
+    let cancelled = false;
+    void (async () => {
+      const tab = await getActiveTab();
+      if (cancelled || tab?.id !== activeTabId) return;
+      if (tab.status && tab.status !== 'complete') return;
+      await scanRef.current({ auto: true });
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabVisible, activeTabId, hydrateGate, active?.tabUrl, active?.unsupported, active?.phase, active?.regions.length, active?.picked]);
+
+  useEffect(() => {
+    if (tabVisible || activeTabId === undefined) return;
+    const r = getRefs(activeTabId);
+    if (r.inflight !== 'scan' || !r.autoScan) return;
+    r.scanGen += 1;
+    restoreFor(activeTabId);
+  }, [tabVisible, activeTabId, getRefs, restoreFor]);
+
   if (activeTabId === undefined || active === undefined) {
     return (
       <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">
@@ -255,19 +369,33 @@ export function ConvertTab({
   const refs = getRefs(id);
   const phase = active.phase;
   const busy = phase === 'scanning' || phase === 'converting' || phase === 'picking';
+  const aiForced = Boolean(active.taskPrompt.trim());
+  const useAi = aiForced || aiWanted;
+  const hasConvertTarget =
+    active.selected === 'custom'
+      ? Boolean(active.picked)
+      : active.regions.length > 0 || active.fromHistory || Boolean(active.markdown);
   const canConvert =
-    Boolean(settings.text.apiKey) && phase !== 'scanning' && phase !== 'picking' && !active.unsupported;
-  const complete = phase === 'done';
+    phase !== 'scanning' &&
+    phase !== 'picking' &&
+    !active.unsupported &&
+    hasConvertTarget &&
+    (!useAi || Boolean(settings.text.apiKey));
+  const complete =
+    Boolean(active.markdown) &&
+    phase !== 'converting' &&
+    phase !== 'scanning' &&
+    phase !== 'picking';
   const selectedRegion = active.regions.find((r) => r.id === active.selected);
   const preVisionHint =
-    settings.visionEnabled && selectedRegion
+    useAi && settings.visionEnabled && selectedRegion
       ? formatVisionHint(
           selectedRegion.imageTotal,
           selectedRegion.imageDecorative,
           settings.visionMaxImages,
         )
       : '';
-  const displayVisionHint = active.visionHint || preVisionHint;
+  const displayVisionHint = useAi ? active.visionHint || preVisionHint : '';
 
   const highlight = async (region: RegionType | null) => {
     if (!highlightOn || region === null) {
@@ -292,33 +420,15 @@ export function ConvertTab({
     }
   };
 
-  const restoreSession = () => {
-    refs.inflight = null;
-    const snap = refs.sessionSnap;
-    refs.sessionSnap = null;
-    if (!snap) {
-      patchState(id, {
-        phase: 'idle',
-        status: '',
-        error: '',
-        regions: [],
-        picked: null,
-        selected: 'main',
-        progress: 0,
-      });
-      void sendToTab(id, { type: 'CLEAR_HIGHLIGHT' }).catch(() => {});
-      return;
-    }
-    patchState(id, { ...snap, status: '', error: '', progress: 0 });
-    const region = snap.picked ? 'custom' : snap.regions.length ? snap.selected : null;
-    void highlight(region);
-  };
+  const restoreSession = () => restoreFor(id);
 
-  const scan = async () => {
-    if (active.unsupported || refs.inflight) return;
+  const scan = async (opts?: { auto?: boolean }) => {
+    const auto = opts?.auto === true;
+    if (active.unsupported || refs.inflight || active.phase === 'converting') return;
     const gen = ++refs.scanGen;
     refs.inflight = 'scan';
-    refs.sessionSnap = captureSession(active, true);
+    refs.autoScan = auto;
+    refs.sessionSnap = captureSession(active, !auto);
     void sendToTab(id, { type: 'PICK_CANCEL', forget: true }).catch(() => {});
     patchState(id, {
       phase: 'scanning',
@@ -327,7 +437,7 @@ export function ConvertTab({
       progress: 0,
       regions: [],
       picked: null,
-      taskPrompt: '',
+      taskPrompt: auto ? active.taskPrompt : '',
       selected: active.selected === 'custom' ? 'main' : active.selected,
     });
     try {
@@ -339,32 +449,49 @@ export function ConvertTab({
       if (!res.ok || !('regions' in res)) throw new Error(res.ok ? '扫描失败' : res.error);
       refs.sessionSnap = null;
       refs.inflight = null;
-      const first = res.regions[0]?.id ?? 'full';
+      refs.autoScan = false;
+      refs.scannedUrl = canonicalUrl(active.tabUrl || '');
+      refs.autoScanBlocked = false;
+      const selected = auto
+        ? pickScanSelected(res.regions, active.selected, active.picked)
+        : (res.regions[0]?.id ?? 'full');
+      const keepPreview = selected === active.selected && Boolean(active.markdown);
+      if (!keepPreview) refs.markdown = '';
       patchState(id, {
         pageTitle: res.title,
         regions: res.regions,
-        selected: first,
+        selected,
         picked: null,
-        taskPrompt: '',
+        taskPrompt: auto ? active.taskPrompt : '',
         phase: 'ready',
         status: '',
         progress: 0,
+        ...(keepPreview ? {} : { markdown: '', fromHistory: false, visionHint: '' }),
       });
-      await highlight(first);
+      await highlight(selected);
     } catch (err) {
       if (gen !== refs.scanGen) return;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (auto && msg.includes('无法连接当前页')) {
+        refs.autoScanBlocked = true;
+        restoreSession();
+        return;
+      }
+      if (auto) refs.scannedUrl = canonicalUrl(active.tabUrl || '');
       restoreSession();
-      patchState(id, { error: err instanceof Error ? err.message : String(err) });
+      patchState(id, { error: msg });
     }
   };
+  scanRef.current = scan;
 
   const cancelScan = () => {
     refs.scanGen += 1;
+    refs.scannedUrl = canonicalUrl(active.tabUrl || '');
     restoreSession();
   };
 
   const pick = async () => {
-    if (active.unsupported || refs.inflight) return;
+    if (active.unsupported || refs.inflight || active.phase === 'converting') return;
     const gen = ++refs.scanGen;
     refs.inflight = 'pick';
     refs.abort?.abort();
@@ -393,12 +520,16 @@ export function ConvertTab({
       if (!('tag' in res)) throw new Error('点选失败');
       refs.sessionSnap = null;
       refs.inflight = null;
+      refs.markdown = '';
       patchState(id, {
         selected: 'custom',
         picked: { tag: res.tag, charCount: res.charCount },
         regions: [],
         phase: 'ready',
         status: '',
+        markdown: '',
+        fromHistory: false,
+        visionHint: '',
       });
       await highlight('custom');
     } catch (err) {
@@ -475,10 +606,11 @@ export function ConvertTab({
     return insertCaptions(md, captions);
   };
 
-  const convert = async () => {
+  const convert = async (useAiRun: boolean) => {
     if (active.unsupported) return;
-    if (!settings.text.apiKey) return;
-    if (settings.visionEnabled && !resolveVisionApiKey(settings)) {
+    if (active.phase === 'scanning' || active.phase === 'picking' || active.phase === 'converting') return;
+    if (useAiRun && !settings.text.apiKey) return;
+    if (useAiRun && settings.visionEnabled && !resolveVisionApiKey(settings)) {
       patchState(id, { error: '已开启图片识别，但 API Key 为空' });
       return;
     }
@@ -495,6 +627,7 @@ export function ConvertTab({
       markdown: '',
       status: '正在提取当前区域…',
       error: '',
+      visionHint: '',
       progress: 8,
       fromHistory: false,
     });
@@ -514,35 +647,44 @@ export function ConvertTab({
         status: '正在转换为 Markdown…',
         progress: 18,
       });
-      const md = await convertHtmlToMarkdown({
-        html,
-        baseURL: settings.text.baseURL,
-        apiKey: settings.text.apiKey,
-        model: settings.text.model,
-        taskPrompt: active.selected === 'custom' ? active.taskPrompt : undefined,
-        onDelta: (delta) => {
-          refs.markdown += delta;
-          if (refs.paintTimer != null) return;
-          refs.paintTimer = setTimeout(() => {
-            refs.paintTimer = null;
-            patchState(id, {
-              markdown: refs.markdown,
-              progress: Math.min(82, 18 + Math.floor(refs.markdown.length / 24)),
-            });
-          }, 80);
-        },
-        signal: ac.signal,
-      });
-      if (refs.paintTimer != null) {
-        clearTimeout(refs.paintTimer);
-        refs.paintTimer = null;
+      let md: string;
+      if (useAiRun) {
+        md = await convertHtmlToMarkdown({
+          html,
+          baseURL: settings.text.baseURL,
+          apiKey: settings.text.apiKey,
+          model: settings.text.model,
+          taskPrompt: active.taskPrompt,
+          onDelta: (delta) => {
+            refs.markdown += delta;
+            if (refs.paintTimer != null) return;
+            refs.paintTimer = setTimeout(() => {
+              refs.paintTimer = null;
+              patchState(id, {
+                markdown: refs.markdown,
+                progress: Math.min(82, 18 + Math.floor(refs.markdown.length / 24)),
+              });
+            }, 80);
+          },
+          signal: ac.signal,
+        });
+        if (refs.paintTimer != null) {
+          clearTimeout(refs.paintTimer);
+          refs.paintTimer = null;
+        }
+      } else {
+        const { htmlToMarkdown } = await import('../../../lib/md/html-to-md');
+        if (ac.signal.aborted) throw new DOMException('已取消', 'AbortError');
+        md = htmlToMarkdown(html);
       }
+      refs.markdown = md;
+      const runVisionNow = useAiRun && settings.visionEnabled;
       patchState(id, {
         markdown: md,
-        progress: settings.visionEnabled ? 82 : 96,
+        progress: runVisionNow ? 82 : 96,
       });
       let finalMd = md;
-      if (settings.visionEnabled) {
+      if (runVisionNow) {
         const visionImages = collectImagesFromHtml(
           html,
           active.tabUrl || extracted.title,
@@ -557,7 +699,7 @@ export function ConvertTab({
           title: extracted.title || active.pageTitle || '未命名',
           url: active.tabUrl || '',
           regionType: active.selected,
-          visionEnabled: settings.visionEnabled,
+          visionEnabled: runVisionNow,
           markdown: finalMd,
         },
         settings.historyLimit,
@@ -593,14 +735,38 @@ export function ConvertTab({
       onPick={() => void pick()}
       onCancelScan={phase === 'picking' ? cancelPick : cancelScan}
       onAbort={() => refs.abort?.abort()}
-      onConvert={() => void convert()}
-      onCopy={() => void copyText(active.markdown)}
-      onDownload={() => downloadMarkdown(active.markdown, active.pageTitle)}
+      onConvert={() => void convert(useAi)}
+      onCopy={() =>
+        void copyText(
+          withSourceMeta(active.markdown, {
+            title: active.pageTitle,
+            url: active.tabUrl,
+            createdAt: Date.now(),
+          }),
+        )
+      }
+      onDownload={() =>
+        downloadMarkdown(
+          withSourceMeta(active.markdown, {
+            title: active.pageTitle,
+            url: active.tabUrl,
+            createdAt: Date.now(),
+          }),
+          active.pageTitle,
+        )
+      }
       onHighlight={(r: RegionType | null) => void highlight(r)}
-      onSelect={(r: RegionType) => patchState(id, { selected: r })}
+      onSelect={(r: RegionType) => {
+        if (r === active.selected) return;
+        refs.markdown = '';
+        patchState(id, { selected: r, markdown: '', fromHistory: false, visionHint: '' });
+      }}
       onTaskPrompt={(taskPrompt: string) => patchState(id, { taskPrompt })}
       highlightOn={highlightOn}
       onToggleHighlight={toggleHighlight}
+      useAi={useAi}
+      aiForced={aiForced}
+      onUseAi={setAiWanted}
     />
   );
 }

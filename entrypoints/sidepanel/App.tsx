@@ -117,7 +117,7 @@ export default function App() {
           aria-hidden={tab !== 'convert'}
           inert={tab !== 'convert'}
         >
-          <ConvertTab settings={settings} onOpenSettings={() => setTab('settings')} />
+          <ConvertTab settings={settings} onOpenSettings={() => setTab('settings')} active={tab === 'convert'} />
         </div>
         <div
           className="html2md-tab-panel overflow-hidden"

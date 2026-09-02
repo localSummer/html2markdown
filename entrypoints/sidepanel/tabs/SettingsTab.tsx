@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { applyMdFontSize, applyTheme } from '../../../lib/theme';
+import { probeCompletions } from '../../../lib/llm/client';
 import {
   DEFAULT_MD_FONT_SIZE,
   MD_FONT_SIZES,
@@ -10,6 +11,7 @@ import {
 } from '../../../lib/settings';
 import { MarkdownPreview } from '../markdown-view';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
@@ -73,6 +75,40 @@ export function SettingsTab({
     void saveSettings(next);
   };
 
+  const [probeMsg, setProbeMsg] = useState<string | null>(null);
+  const [probeOk, setProbeOk] = useState<boolean | null>(null);
+  const [probing, setProbing] = useState(false);
+  const probeAbort = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => probeAbort.current?.abort();
+  }, []);
+
+  const onProbe = async () => {
+    probeAbort.current?.abort();
+    const ac = new AbortController();
+    probeAbort.current = ac;
+    setProbing(true);
+    setProbeMsg(null);
+    setProbeOk(null);
+    try {
+      await probeCompletions({
+        baseURL: settings.text.baseURL,
+        apiKey: settings.text.apiKey,
+        signal: ac.signal,
+      });
+      if (ac.signal.aborted) return;
+      setProbeOk(true);
+      setProbeMsg('连接成功');
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      setProbeOk(false);
+      setProbeMsg(err instanceof Error ? err.message : String(err));
+    } finally {
+      if (!ac.signal.aborted) setProbing(false);
+    }
+  };
+
   return (
     <div className="html2md-scroll h-full">
       <div className="html2md-scroll-body space-y-3 px-3 text-sm">
@@ -132,7 +168,7 @@ export function SettingsTab({
       <Card className="gap-3 py-4">
         <CardHeader className="px-4">
           <CardTitle>文本模型</CardTitle>
-          <CardDescription>用于把 HTML 转成 Markdown</CardDescription>
+          <CardDescription>用于 AI 转换与任务说明；本地转换不需要</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 px-4">
           <Field
@@ -160,6 +196,22 @@ export function SettingsTab({
               patch({ ...settings, text: { ...settings.text, model: e.target.value } })
             }
           />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={probing || !settings.text.apiKey.trim() || !settings.text.baseURL.trim()}
+              onClick={() => void onProbe()}
+            >
+              {probing ? '测试中…' : '测试连接'}
+            </Button>
+            {probeMsg ? (
+              <span className={probeOk ? 'text-xs text-primary-soft-foreground' : 'text-xs text-destructive'}>
+                {probeMsg}
+              </span>
+            ) : null}
+          </div>
         </CardContent>
       </Card>
 
@@ -277,8 +329,7 @@ export function SettingsTab({
 
       <Alert variant="info">
         <AlertDescription>
-          转换会将所选区域清洗后的 HTML（若开启图片识别，还包括图片数据）发送到你填写的 API
-          地址。本扩展不设中转服务器，不收集 Key 与正文。
+          本地转换不经过 API。开启 AI 或图片识别时，会将所选区域清洗后的 HTML（图片识别还包括图片数据）发送到你填写的 API 地址。本扩展不设中转服务器，不收集 Key 与正文。
         </AlertDescription>
       </Alert>
       </div>

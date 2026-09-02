@@ -1,4 +1,4 @@
-import { buildConvertMessages, completionsUrl } from './prompt';
+import { buildConvertMessages, completionsUrl, modelsUrl } from './prompt';
 
 export type StreamCallbacks = {
   onDelta: (text: string) => void;
@@ -107,6 +107,26 @@ export async function chatCompletions(options: {
   const text = json.choices?.[0]?.message?.content ?? '';
   if (text && onDelta) onDelta(text);
   return text;
+}
+
+export async function probeCompletions(options: {
+  baseURL: string;
+  apiKey: string;
+  signal?: AbortSignal;
+}): Promise<void> {
+  const { baseURL, apiKey, signal } = options;
+  let res: Response;
+  try {
+    res = await fetch(modelsUrl(baseURL), {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') throw err;
+    throw new Error('网络错误，请检查网络后重试');
+  }
+  if (res.status === 404) throw new Error('无法列出模型，请确认 baseURL');
+  if (!res.ok) throw new Error(mapHttpError(res.status));
 }
 
 export async function convertHtmlToMarkdown(options: {

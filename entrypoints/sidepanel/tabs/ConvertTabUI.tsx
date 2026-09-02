@@ -78,6 +78,9 @@ export function ConvertTabUI(props: {
   onTaskPrompt: (prompt: string) => void;
   highlightOn: boolean;
   onToggleHighlight: (on: boolean) => void;
+  useAi: boolean;
+  aiForced: boolean;
+  onUseAi: (on: boolean) => void;
 }) {
   const {
     active,
@@ -102,6 +105,9 @@ export function ConvertTabUI(props: {
     onTaskPrompt,
     highlightOn,
     onToggleHighlight,
+    useAi,
+    aiForced,
+    onUseAi,
   } = props;
 
   const err = active.error;
@@ -182,7 +188,7 @@ export function ConvertTabUI(props: {
         {!settings.text.apiKey ? (
           <Alert variant="warning">
             <AlertDescription>
-              未配置文本模型 API Key，仍可扫描。
+              未配置文本模型 API Key，仍可本地转换。AI 转换需配置密钥。
               <Button variant="link" size="sm" className="h-auto p-0 pl-1" onClick={onOpenSettings}>
                 去设置
               </Button>
@@ -198,7 +204,7 @@ export function ConvertTabUI(props: {
                 <CardDescription>
                   {active.selected === 'custom' && active.picked
                     ? '已选定页面元素，可填写任务说明后转换'
-                    : '先扫描或指定区域，再转换'}
+                    : '先扫描或指定区域，再转换（默认为本地，可开 AI 增强）'}
                 </CardDescription>
               </div>
               <Label htmlFor="highlight-toggle" className="flex shrink-0 items-center gap-1.5 pt-0.5 text-xs text-muted-foreground">
@@ -258,19 +264,6 @@ export function ConvertTabUI(props: {
                   </span>
                   <span className="ml-auto text-xs text-muted-foreground">约 {active.picked.charCount} 字</span>
                 </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="task-prompt" className="text-muted-foreground">
-                    自定义 Prompt（可空，空则转为 Markdown）
-                  </Label>
-                  <textarea
-                    id="task-prompt"
-                    value={active.taskPrompt}
-                    onChange={(e) => onTaskPrompt(e.target.value)}
-                    placeholder="例如：转成 Markdown；用三条要点总结"
-                    rows={3}
-                    className="placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input w-full min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                  />
-                </div>
               </div>
             ) : active.regions.length > 0 ? (
               <div className="grid gap-1">
@@ -278,14 +271,22 @@ export function ConvertTabUI(props: {
                   <button
                     key={r.id}
                     type="button"
-                    onMouseEnter={() => onHighlight(r.id)}
-                    onMouseLeave={() => onHighlight(active.selected)}
+                    disabled={busy}
+                    onMouseEnter={() => {
+                      if (busy) return;
+                      onHighlight(r.id);
+                    }}
+                    onMouseLeave={() => {
+                      if (busy) return;
+                      onHighlight(active.selected);
+                    }}
                     onClick={() => {
                       onSelect(r.id);
                       onHighlight(r.id);
                     }}
                     className={cn(
-                      'flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-all cursor-pointer',
+                      'flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-all',
+                      busy ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
                       active.selected === r.id
                         ? 'border-primary/40 bg-accent text-accent-foreground shadow-[0_2px_8px_-2px_var(--color-primary)/25]'
                         : 'border-border/60 text-muted-foreground hover:bg-accent/60 hover:border-primary/30 hover:shadow-[0_2px_6px_-2px_rgba(0,0,0,0.08)]',
@@ -308,6 +309,22 @@ export function ConvertTabUI(props: {
             ) : (
               <p className="text-xs text-muted-foreground">尚未扫描。</p>
             )}
+            {(active.picked || active.regions.length > 0) && phase !== 'picking' && phase !== 'scanning' ? (
+              <div className="mt-3 grid gap-1.5">
+                <Label htmlFor="task-prompt" className="text-muted-foreground">
+                  任务说明（可空；填写后走 AI 转换）
+                </Label>
+                <textarea
+                  id="task-prompt"
+                  value={active.taskPrompt}
+                  disabled={converting}
+                  onChange={(e) => onTaskPrompt(e.target.value)}
+                  placeholder="例如：转成 Markdown；用三条要点总结"
+                  rows={3}
+                  className="placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input w-full min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-60"
+                />
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -412,13 +429,27 @@ export function ConvertTabUI(props: {
           />
         </MarkdownFullscreen>
 
-      <div className="shrink-0 border-t bg-gradient-to-t from-background to-card/40 p-3 backdrop-blur">
+      <div className="shrink-0 space-y-2 border-t bg-gradient-to-t from-background to-card/40 p-3 backdrop-blur">
+        {settings.text.apiKey ? (
+          <Label htmlFor="ai-enhance" className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{aiForced ? '任务说明已填写，将使用 AI 转换' : 'AI 增强'}</span>
+            <Switch
+              id="ai-enhance"
+              checked={useAi}
+              disabled={aiForced || phase === 'converting'}
+              onCheckedChange={onUseAi}
+            />
+          </Label>
+        ) : aiForced ? (
+          <p className="text-xs text-muted-foreground">
+            填写任务说明需要 API Key
+            <Button variant="link" size="sm" className="h-auto p-0 pl-1" onClick={onOpenSettings}>
+              去设置
+            </Button>
+          </p>
+        ) : null}
         <Button
-          disabled={
-            !canConvert ||
-            busy ||
-            (active.selected === 'custom' ? !active.picked : active.regions.length === 0)
-          }
+          disabled={!canConvert || busy}
           onClick={onConvert}
           className={cn(
             'relative w-full overflow-hidden',
@@ -436,8 +467,12 @@ export function ConvertTabUI(props: {
             {phase === 'converting'
               ? `${active.status || '转换中…'} ${Math.round(active.progress)}%`
               : active.markdown
-                ? '重新转换'
-                : '转换为 Markdown'}
+                ? useAi
+                  ? '重新 AI 转换'
+                  : '重新转换'
+                : useAi
+                  ? 'AI 转换'
+                  : '转换为 Markdown'}
           </span>
         </Button>
       </div>

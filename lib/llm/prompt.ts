@@ -54,3 +54,9 @@ export function completionsUrl(baseURL: string): string {
   if (trimmed.endsWith('/chat/completions')) return trimmed;
   return `${trimmed}/chat/completions`;
 }
+
+export function modelsUrl(baseURL: string): string {
+  const trimmed = baseURL.trim().replace(/\/+$/, '');
+  if (trimmed.endsWith('/chat/completions')) return trimmed.replace(/\/chat\/completions$/, '/models');
+  return `${trimmed}/models`;
+}

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Copy, Download, ExternalLink, Search, Trash2 } from 'lucide-react';
-import { copyText, downloadMarkdown } from '../../../lib/export';
+import { copyText, downloadMarkdown, withSourceMeta } from '../../../lib/export';
 import {
   clearRecords,
   deleteRecord,
@@ -139,7 +139,15 @@ export function HistoryTab({ active = true }: { active?: boolean }) {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => void copyText(r.markdown)}
+                            onClick={() =>
+                              void copyText(
+                                withSourceMeta(r.markdown, {
+                                  title: r.title,
+                                  url: r.url,
+                                  createdAt: r.createdAt,
+                                }),
+                              )
+                            }
                           >
                             <Copy />
                             复制
@@ -147,7 +155,16 @@ export function HistoryTab({ active = true }: { active?: boolean }) {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => downloadMarkdown(r.markdown, r.title)}
+                            onClick={() =>
+                              downloadMarkdown(
+                                withSourceMeta(r.markdown, {
+                                  title: r.title,
+                                  url: r.url,
+                                  createdAt: r.createdAt,
+                                }),
+                                r.title,
+                              )
+                            }
                           >
                             <Download />
                             下载

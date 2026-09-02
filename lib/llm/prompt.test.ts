@@ -1,4 +1,4 @@
-import { SYSTEM_PROMPT, TASK_SYSTEM_PROMPT, VISION_IMAGE_PROMPT, assertWithinLimit, buildConvertMessages, completionsUrl, MAX_HTML_CHARS } from './prompt';
+import { SYSTEM_PROMPT, TASK_SYSTEM_PROMPT, VISION_IMAGE_PROMPT, assertWithinLimit, buildConvertMessages, completionsUrl, modelsUrl, MAX_HTML_CHARS } from './prompt';
 
 describe('assertWithinLimit', () => {
   it('allows content under the cap', () => {
@@ -24,6 +24,18 @@ describe('completionsUrl', () => {
   it('does not duplicate the path', () => {
     expect(completionsUrl('https://api.deepseek.com/v1/chat/completions/')).toBe(
       'https://api.deepseek.com/v1/chat/completions',
+    );
+  });
+});
+
+describe('modelsUrl', () => {
+  it('appends models to /v1', () => {
+    expect(modelsUrl('https://api.deepseek.com/v1')).toBe('https://api.deepseek.com/v1/models');
+  });
+
+  it('rewrites chat/completions to models', () => {
+    expect(modelsUrl('https://api.deepseek.com/v1/chat/completions/')).toBe(
+      'https://api.deepseek.com/v1/models',
     );
   });
 });
