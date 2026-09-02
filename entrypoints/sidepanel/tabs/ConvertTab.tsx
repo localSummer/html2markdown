@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { copyText, downloadMarkdown, withSourceMeta } from '../../../lib/export';
+import { withSourceMeta } from '../../../lib/export';
 import { addRecord, canonicalUrl, findLatestByUrl } from '../../../lib/history/db';
 import { convertHtmlToMarkdown } from '../../../lib/llm/convert';
 import { chatCompletions } from '../../../lib/llm/client';
@@ -17,6 +17,7 @@ import {
   selectVisionImages,
 } from '../../../lib/vision/images';
 import { fetchVisionImages } from '../../../lib/vision/fetch';
+import { copyWithFeedback, downloadWithFeedback } from '../feedback.ts';
 import { ConvertTabUI } from './ConvertTabUI.tsx';
 import { FRESH_STATE, type Phase, type TabState } from './convert-types.ts';
 
@@ -737,7 +738,7 @@ export function ConvertTab({
       onAbort={() => refs.abort?.abort()}
       onConvert={() => void convert(useAi)}
       onCopy={() =>
-        void copyText(
+        void copyWithFeedback(
           withSourceMeta(active.markdown, {
             title: active.pageTitle,
             url: active.tabUrl,
@@ -746,7 +747,7 @@ export function ConvertTab({
         )
       }
       onDownload={() =>
-        downloadMarkdown(
+        downloadWithFeedback(
           withSourceMeta(active.markdown, {
             title: active.pageTitle,
             url: active.tabUrl,

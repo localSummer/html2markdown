@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { ConvertTab } from './tabs/ConvertTab';
 import { HistoryTab } from './tabs/HistoryTab';
 import { SettingsTab } from './tabs/SettingsTab';
+import { Toaster } from '@/components/ui/sonner';
 
 type TabId = 'convert' | 'history' | 'settings';
 
@@ -136,6 +137,7 @@ export default function App() {
           <SettingsTab settings={settings} onChange={setSettings} active={tab === 'settings'} />
         </div>
       </main>
+      <Toaster theme={settings.theme === 'follow_system' ? 'system' : settings.theme} />
     </div>
   );
 }

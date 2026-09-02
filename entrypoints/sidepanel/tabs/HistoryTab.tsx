@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Copy, Download, ExternalLink, Search, Trash2 } from 'lucide-react';
-import { copyText, downloadMarkdown, withSourceMeta } from '../../../lib/export';
+import { withSourceMeta } from '../../../lib/export';
 import {
   clearRecords,
   deleteRecord,
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { FullscreenButton, MarkdownFullscreen, MarkdownScrollBox } from '../markdown-view.tsx';
+import { copyWithFeedback, downloadWithFeedback } from '../feedback.ts';
 
 export function HistoryTab({ active = true }: { active?: boolean }) {
   const [rows, setRows] = useState<HistoryRecord[]>([]);
@@ -140,7 +141,7 @@ export function HistoryTab({ active = true }: { active?: boolean }) {
                             variant="outline"
                             size="sm"
                             onClick={() =>
-                              void copyText(
+                              void copyWithFeedback(
                                 withSourceMeta(r.markdown, {
                                   title: r.title,
                                   url: r.url,
@@ -156,7 +157,7 @@ export function HistoryTab({ active = true }: { active?: boolean }) {
                             variant="outline"
                             size="sm"
                             onClick={() =>
-                              downloadMarkdown(
+                              downloadWithFeedback(
                                 withSourceMeta(r.markdown, {
                                   title: r.title,
                                   url: r.url,
