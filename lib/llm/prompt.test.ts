@@ -1,4 +1,4 @@
-import { SYSTEM_PROMPT, TASK_SYSTEM_PROMPT, VISION_IMAGE_PROMPT, assertWithinLimit, buildConvertMessages, completionsUrl, modelsUrl, MAX_HTML_CHARS } from './prompt';
+import { SYSTEM_PROMPT, TASK_SYSTEM_PROMPT, VISION_IMAGE_PROMPT, assertWithinLimit, buildConvertMessages, completionsUrl, modelsUrl } from './prompt';
 
 describe('assertWithinLimit', () => {
   it('allows content under the cap', () => {
@@ -6,11 +6,11 @@ describe('assertWithinLimit', () => {
   });
 
   it('rejects oversized html', () => {
-    expect(() => assertWithinLimit('x'.repeat(12), 10)).toThrow(/超出安全上限/);
+    expect(() => assertWithinLimit('x'.repeat(12), 10)).toThrow(/超出 AI 输入上限/);
   });
 
-  it('uses the default cap', () => {
-    expect(MAX_HTML_CHARS).toBe(80_000);
+  it('skips the check when limit is 0', () => {
+    expect(() => assertWithinLimit('x'.repeat(100), 0)).not.toThrow();
   });
 });
 

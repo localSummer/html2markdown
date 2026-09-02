@@ -641,7 +641,7 @@ export function ConvertTab({
         ? refineReadableHtml(extracted.html, active.tabUrl || extracted.title)
         : extracted.html;
       if (extracted.navHtml) html = `${extracted.navHtml}\n${html}`;
-      assertWithinLimit(html);
+      if (useAiRun) assertWithinLimit(html, settings.maxHtmlChars);
       patchState(id, {
         pageTitle: extracted.title || active.pageTitle,
         status: '正在转换为 Markdown…',

@@ -133,7 +133,7 @@ export default function App() {
           aria-hidden={tab !== 'settings'}
           inert={tab !== 'settings'}
         >
-          <SettingsTab settings={settings} onChange={setSettings} />
+          <SettingsTab settings={settings} onChange={setSettings} active={tab === 'settings'} />
         </div>
       </main>
     </div>

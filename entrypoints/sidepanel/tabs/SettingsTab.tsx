@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Monitor, Moon, Sun } from 'lucide-react';
+import { ACTION_COMMAND, shortcutLabel, shortcutsPageUrl } from '../../../lib/shortcut';
 import { applyMdFontSize, applyTheme } from '../../../lib/theme';
 import { probeCompletions } from '../../../lib/llm/client';
 import {
@@ -61,9 +62,11 @@ function Field({
 export function SettingsTab({
   settings,
   onChange,
+  active = true,
 }: {
   settings: Settings;
   onChange: (settings: Settings) => void;
+  active?: boolean;
 }) {
   useEffect(() => {
     applyTheme(settings.theme);
@@ -79,10 +82,30 @@ export function SettingsTab({
   const [probeOk, setProbeOk] = useState<boolean | null>(null);
   const [probing, setProbing] = useState(false);
   const probeAbort = useRef<AbortController | null>(null);
+  const [shortcut, setShortcut] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     return () => probeAbort.current?.abort();
   }, []);
+
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    const load = () => {
+      void browser.commands.getAll().then((cmds) => {
+        if (cancelled) return;
+        const cmd = cmds.find((c) => c.name === ACTION_COMMAND);
+        setShortcut(cmd?.shortcut);
+      });
+    };
+    load();
+    const onFocus = () => load();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [active]);
 
   const onProbe = async () => {
     probeAbort.current?.abort();
@@ -167,6 +190,32 @@ export function SettingsTab({
 
       <Card className="gap-3 py-4">
         <CardHeader className="px-4">
+          <CardTitle>快捷键</CardTitle>
+          <CardDescription>打开或关闭侧栏。Chrome / Edge 不允许扩展自己改快捷键，只能到浏览器页面修改</CardDescription>
+        </CardHeader>
+        <CardContent className="px-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-muted-foreground">当前快捷键</p>
+              <p className="font-medium">{shortcutLabel(shortcut)}</p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => {
+                void browser.tabs.create({ url: shortcutsPageUrl(navigator.userAgent) });
+              }}
+            >
+              去修改
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="gap-3 py-4">
+        <CardHeader className="px-4">
           <CardTitle>文本模型</CardTitle>
           <CardDescription>用于 AI 转换与任务说明；本地转换不需要</CardDescription>
         </CardHeader>
@@ -195,6 +244,17 @@ export function SettingsTab({
             onChange={(e) =>
               patch({ ...settings, text: { ...settings.text, model: e.target.value } })
             }
+          />
+          <Field
+            id="max-html-chars"
+            label="AI 输入上限（字符，0 表示不限制）"
+            inputMode="numeric"
+            value={String(settings.maxHtmlChars)}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (!Number.isFinite(n) || n < 0) return;
+              patch({ ...settings, maxHtmlChars: Math.floor(n) });
+            }}
           />
           <div className="flex flex-wrap items-center gap-2">
             <Button

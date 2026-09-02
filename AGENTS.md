@@ -41,8 +41,8 @@ components/ui/         # shadcn 风格组件，保持通用
 ## 架构要点
 
 - **消息**：侧栏 / background ↔ content，类型以 `lib/messages.ts` 为准。content 对未知消息忽略；`handlePageMessage` 异步时 listener 必须 `return true`。
-- **侧栏**：按 tab 启用。`browser.sidePanel.open` 必须在用户手势的同步栈里调用，前面不能 `await`。工具栏图标或 `_execute_action`（默认 Alt+Shift+M）再点一次会关掉该 tab 的侧栏。
-- **转换流**：打开转换页对当前 URL 自动 SCAN（去重、页未 complete 则等、不可见不扫、等历史回填结束）。然后 `EXTRACT` 拿清洗 HTML，默认 Turndown 一次写出；AI 路径流式写入 `markdown`（约 80ms 节流），可选 vision。选区变化时清掉旧预览。不要在 content script 里跑 Turndown。
+- **侧栏**：按 tab 启用。`browser.sidePanel.open` 必须在用户手势的同步栈里调用，前面不能 `await`。工具栏图标或 `_execute_action`（默认 Alt+Shift+M）再点一次会关掉该 tab 的侧栏。快捷键改不了（Chrome 限制），设置页只展示并用 `tabs.create` 打开浏览器快捷键页。
+- **转换流**：打开转换页对当前 URL 自动 SCAN（去重、页未 complete 则等、不可见不扫、等历史回填结束）。然后 `EXTRACT` 拿清洗 HTML，默认 Turndown 一次写出（不限制长度）；AI 路径按设置的 `maxHtmlChars` 校验（默认 10 万字符，0 不限制），再流式写入 `markdown`（约 80ms 节流），可选 vision。选区变化时清掉旧预览。不要在 content script 里跑 Turndown。
 - **任务说明**：扫描与点选共用；非空则强制 AI。本地转换忽略任务说明。自动扫描不要清空已输入的 prompt。
 - **导出**：`withSourceMeta` 只用于复制/下载，不要写进预览或 IndexedDB。
 - **连通探测**：仅设置页按钮触发 `GET .../models`，不要在输入时请求，404 不要改打 chat。

@@ -17,11 +17,13 @@ export type Settings = {
   floatingButton: boolean;
   theme: ThemeMode;
   mdFontSize: number;
+  maxHtmlChars: number;
 };
 
 export const DEFAULT_BASE_URL = 'https://api.deepseek.com/v1';
 export const DEFAULT_MD_FONT_SIZE = 14;
 export const MD_FONT_SIZES = [12, 13, 14, 15, 16, 17, 18] as const;
+export const DEFAULT_MAX_HTML_CHARS = 100_000;
 
 export const DEFAULT_SETTINGS: Settings = {
   text: {
@@ -42,6 +44,7 @@ export const DEFAULT_SETTINGS: Settings = {
   floatingButton: true,
   theme: 'follow_system',
   mdFontSize: DEFAULT_MD_FONT_SIZE,
+  maxHtmlChars: DEFAULT_MAX_HTML_CHARS,
 };
 
 const STORAGE_KEY = 'html2md.settings';
@@ -91,6 +94,10 @@ export function mergeSettings(raw: unknown): Settings {
       typeof raw.mdFontSize === 'number' && (MD_FONT_SIZES as readonly number[]).includes(raw.mdFontSize)
         ? raw.mdFontSize
         : DEFAULT_SETTINGS.mdFontSize,
+    maxHtmlChars:
+      typeof raw.maxHtmlChars === 'number' && raw.maxHtmlChars >= 0
+        ? Math.floor(raw.maxHtmlChars)
+        : DEFAULT_SETTINGS.maxHtmlChars,
   };
 }
 

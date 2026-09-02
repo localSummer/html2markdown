@@ -13,6 +13,7 @@ describe('mergeSettings', () => {
     expect(s.floatingButton).toBe(true);
     expect(s.theme).toBe('follow_system');
     expect(s.mdFontSize).toBe(14);
+    expect(s.maxHtmlChars).toBe(100_000);
   });
 
   it('keeps valid overrides', () => {
@@ -20,16 +21,19 @@ describe('mergeSettings', () => {
       text: { apiKey: 'k', model: 'custom', baseURL: 'http://localhost:11434/v1' },
       visionMaxImages: 3.8,
       mdFontSize: 16,
+      maxHtmlChars: 0,
     });
     expect(s.text.apiKey).toBe('k');
     expect(s.text.model).toBe('custom');
     expect(s.visionMaxImages).toBe(3);
     expect(s.mdFontSize).toBe(16);
+    expect(s.maxHtmlChars).toBe(0);
   });
 
   it('falls back to default mdFontSize when invalid', () => {
     expect(mergeSettings({ mdFontSize: 11 }).mdFontSize).toBe(14);
     expect(mergeSettings({ mdFontSize: '16' }).mdFontSize).toBe(14);
+    expect(mergeSettings({ maxHtmlChars: -1 }).maxHtmlChars).toBe(100_000);
   });
 });
 

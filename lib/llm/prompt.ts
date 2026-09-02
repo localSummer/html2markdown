@@ -39,12 +39,11 @@ export function buildConvertMessages(
   ];
 }
 
-export const MAX_HTML_CHARS = 80_000;
-
-export function assertWithinLimit(html: string, limit = MAX_HTML_CHARS): void {
+export function assertWithinLimit(html: string, limit: number): void {
+  if (limit <= 0) return;
   if (html.length > limit) {
     throw new Error(
-      `内容约 ${html.length} 字，超出安全上限 ${limit}。请改选「主内容」或更小区域后再转换`,
+      `内容约 ${html.length} 字，超出 AI 输入上限 ${limit}。请改选更小区域，或在设置中提高上限（0 表示不限制）`,
     );
   }
 }
