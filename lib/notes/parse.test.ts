@@ -49,6 +49,28 @@ describe('parseNote', () => {
     expect(parseNote(examples.comparison.replace(table, '```md\n' + table + '\n```'), noteFormat('comparison'))).toBeNull();
   });
 
+  it.each(NOTE_TEMPLATES)('parses fenced $id model output', ({ id }) => {
+    expect(parseNote('```markdown\n' + examples[id] + '\n```', noteFormat(id))).not.toBeNull();
+  });
+
+  it('accepts common Cornell model output without falling back', () => {
+    const fenced = '```markdown\n# 标题\n\n## 提示: 为什么？\n\n详细笔记。\n\n## 图片描述\n\n图说。\n\n## 总结\n\n总结正文。\n```';
+    const parsed = parseNote(fenced, noteFormat('cornell'));
+    expect(parsed).not.toBeNull();
+    expect(parsed!.sections.map((section) => section.heading)).toEqual(['提示: 为什么？', '总结']);
+    expect(parsed!.sections[0]!.body).toContain('详细笔记');
+    expect(parsed!.sections[0]!.body).toContain('图说');
+    expect(parsed!.sections[1]!.heading).toBe('总结');
+  });
+
+  it('accepts common Q&A model output without falling back', () => {
+    const markdown = '# 标题\n\n## 问题: 为什么？\n\n因为如此。\n\n## 图片描述\n\n图说。\n\n## 问题: 如何验证？\n\n检查结果。';
+    const parsed = parseNote(markdown, noteFormat('qa'));
+    expect(parsed).not.toBeNull();
+    expect(parsed!.sections.map((section) => section.heading)).toEqual(['问题: 为什么？', '问题: 如何验证？']);
+    expect(parsed!.sections[0]!.body).toContain('图说');
+  });
+
   it('does not split code fences or blockquote headings', () => {
     const appendix = '\n\n```md\n## 问题：伪标题\n# 伪标题\n```\n\n> ## 引用中的标题\n> 正文\n';
     const parsed = parseNote(examples.qa + appendix, noteFormat('qa'))!;
@@ -68,9 +90,20 @@ describe('parseNote', () => {
     expect(parsed.titleMarkdown + parsed.preamble + parsed.sections.map((section) => section.headingMarkdown + section.body).join('')).toBe(markdown);
   });
 
-  it('preserves extra outline headings and falls back on unexpected fixed-template image captions', () => {
+  it('preserves extra outline headings and folds unexpected captions into fixed templates', () => {
     const caption = '\n\n## 图片描述\n\n![图](https://example.com/a.png)\n\n图说正文。';
-    expect(parseNote(examples.reading + caption, noteFormat('reading'))).toBeNull();
+    const reading = parseNote(examples.reading + caption, noteFormat('reading'));
+    expect(reading).not.toBeNull();
+    expect(reading!.sections.map((section) => section.heading)).toEqual(['核心论点', '证据', '推理', '局限与待核实问题']);
+    expect(reading!.sections[3]!.body).toContain('图说正文');
+    const action = parseNote(examples.action + caption, noteFormat('action'));
+    expect(action).not.toBeNull();
+    expect(action!.sections).toHaveLength(5);
+    expect(action!.sections[4]!.body).toContain('图说正文');
+    const comparison = parseNote(examples.comparison.replace(table, `${table}\n\n## 图片描述\n\n图说正文。`), noteFormat('comparison'));
+    expect(comparison).not.toBeNull();
+    expect(comparison!.sections.map((section) => section.heading)).toEqual(['对比对象', '维度比较', '适用条件', '结论']);
+    expect(comparison!.sections[1]!.body).toContain('图说正文');
     const extra = '\n\n## 附录\n\n- 附加内容\n';
     const parsed = parseNote(examples.outline + extra, noteFormat('outline'))!;
     expect(parsed.sections).toHaveLength(3);

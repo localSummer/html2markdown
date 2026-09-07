@@ -3,12 +3,14 @@ import remarkParse from 'remark-parse';
 import remarkGfm from 'remark-gfm';
 import { getNoteTemplate, isSupportedNoteFormat, type NoteFormat } from './templates';
 
+export type ParsedNoteSection = { heading: string; headingMarkdown: string; body: string };
+
 export type ParsedNote = {
   format: NoteFormat;
   title: string;
   titleMarkdown: string;
   preamble: string;
-  sections: Array<{ heading: string; headingMarkdown: string; body: string }>;
+  sections: ParsedNoteSection[];
   references: string;
 };
 
@@ -16,9 +18,27 @@ const parser = unified().use(remarkParse).use(remarkGfm);
 type Node = ReturnType<typeof parser.parse>['children'][number];
 type TextNode = { type: string; value?: string; alt?: string | null; children?: readonly TextNode[] };
 
+function unwrapDocument(markdown: string): string {
+  const trimmed = markdown.trim();
+  const fenced = trimmed.match(/^```(?:markdown|md)?\r?\n([\s\S]*)\r?\n```$/i);
+  return fenced?.[1] ?? markdown;
+}
+
 function text(node: TextNode): string {
   if (node.children) return node.children.map(text).join('');
   return node.value ?? node.alt ?? '';
+}
+
+function isCueHeading(heading: string): boolean {
+  return /^(?:提示|Cue)\s*[:：]\s*\S/i.test(heading);
+}
+
+function isSummaryHeading(heading: string): boolean {
+  return /^(?:总结|小结|Summary)$/i.test(heading);
+}
+
+function isQuestionHeading(heading: string): boolean {
+  return /^(?:问题|Question)\s*[:：]\s*\S/i.test(heading);
 }
 
 function hasContent(nodes: Node[]): boolean {
@@ -31,8 +51,26 @@ function hasContent(nodes: Node[]): boolean {
   });
 }
 
+function foldExtraSections(
+  sections: ParsedNoteSection[],
+  keep: (heading: string, index: number, sections: ParsedNoteSection[]) => boolean,
+): ParsedNoteSection[] | null {
+  const kept: ParsedNoteSection[] = [];
+  for (const [index, section] of sections.entries()) {
+    if (keep(section.heading, index, sections)) {
+      kept.push({ ...section });
+      continue;
+    }
+    const previous = kept.at(-1);
+    if (!previous) return null;
+    previous.body += section.headingMarkdown + section.body;
+  }
+  return kept.length ? kept : null;
+}
+
 export function parseNote(markdown: string, format: unknown): ParsedNote | null {
   if (!isSupportedNoteFormat(format)) return null;
+  markdown = unwrapDocument(markdown);
   const root = parser.parse(markdown);
   const nodes = root.children;
   const title = nodes[0];
@@ -44,7 +82,7 @@ export function parseNote(markdown: string, format: unknown): ParsedNote | null 
   const starts = nodes.flatMap((node, index) => node.type === 'heading' && node.depth === 2 ? [index] : []);
   if (!starts.length) return null;
   const sectionNodes = starts.map((start, index) => nodes.slice(start + 1, starts[index + 1] ?? nodes.length));
-  const sections = starts.map((start, index) => {
+  let sections = starts.map((start, index) => {
     const heading = nodes[start]!;
     const next = nodes[starts[index + 1] ?? nodes.length];
     return {
@@ -55,13 +93,42 @@ export function parseNote(markdown: string, format: unknown): ParsedNote | null 
   });
   if (sections.some((section, index) => !section.heading || !/^ {0,3}##\s/.test(section.headingMarkdown) || !hasContent(sectionNodes[index]!))) return null;
 
-  const headings = sections.map((section) => section.heading);
   const template = getNoteTemplate(format.templateId)!;
-  if (template.headings && (headings.length !== template.headings.length || headings.some((heading, index) => heading !== template.headings![index]))) return null;
-  if (format.templateId === 'cornell' && (headings.length < 2 || headings.at(-1) !== '总结' || headings.slice(0, -1).some((heading) => !/^提示：\s*\S/.test(heading)))) return null;
-  if (format.templateId === 'qa' && headings.some((heading) => !/^问题：\s*\S/.test(heading))) return null;
+  if (format.templateId === 'cornell') {
+    const folded = foldExtraSections(sections, (heading, index, all) => {
+      const summaryAt = all.findLastIndex((section) => isSummaryHeading(section.heading));
+      if (index === summaryAt) return true;
+      return index < summaryAt && isCueHeading(heading);
+    });
+    if (!folded || folded.length < 2 || !isSummaryHeading(folded.at(-1)!.heading) || folded.slice(0, -1).some((section) => !isCueHeading(section.heading))) return null;
+    sections = folded;
+  }
+  if (format.templateId === 'qa') {
+    const folded = foldExtraSections(sections, (heading) => isQuestionHeading(heading));
+    if (!folded || folded.some((section) => !isQuestionHeading(section.heading))) return null;
+    sections = folded;
+  }
+  if (template.headings) {
+    const required = template.headings;
+    let next = 0;
+    const folded = foldExtraSections(sections, (heading) => {
+      if (next < required.length && heading === required[next]) {
+        next += 1;
+        return true;
+      }
+      return false;
+    });
+    if (!folded || folded.length !== required.length || folded.some((section, index) => section.heading !== required[index])) return null;
+    sections = folded;
+  }
   if (format.templateId === 'outline' && sectionNodes.some((children) => !children.some((node) => node.type === 'list' || (node.type === 'heading' && node.depth > 2)))) return null;
-  if (format.templateId === 'comparison' && !sectionNodes[1]!.some((node) => node.type === 'table' && node.children.length > 1)) return null;
+  if (format.templateId === 'comparison') {
+    const dimension = sections.find((section) => section.heading === '维度比较');
+    const dimensionNodes = dimension
+      ? parser.parse(`${dimension.headingMarkdown}\n${dimension.body}`).children
+      : [];
+    if (!dimensionNodes.some((node) => node.type === 'table' && node.children.length > 1)) return null;
+  }
 
   const definitions: string[] = [];
   let hasFootnotes = false;
