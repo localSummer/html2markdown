@@ -21,7 +21,8 @@ export type WorkPref = {
 };
 
 export function nextPageAiConfig(pref: WorkPref | null): WorkPref {
-  return pref ?? { aiWanted: false, templateId: 'plain' };
+  if (!pref?.aiWanted) return { aiWanted: false, templateId: 'plain' };
+  return { aiWanted: true, templateId: pref.templateId };
 }
 
 export type TabState = {

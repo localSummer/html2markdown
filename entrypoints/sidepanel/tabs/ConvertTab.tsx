@@ -796,16 +796,35 @@ export function ConvertTab({
       }}
       onTaskPrompt={(taskPrompt: string) => patchState(id, { taskPrompt })}
       onTemplate={(templateId) => {
+        if (templateId === 'plain') {
+          workPrefRef.current = {
+            aiWanted: active.aiWanted,
+            templateId: workPrefRef.current?.templateId && workPrefRef.current.templateId !== 'plain'
+              ? workPrefRef.current.templateId
+              : 'plain',
+          };
+          patchState(id, { templateId: 'plain' });
+          return;
+        }
         workPrefRef.current = { aiWanted: true, templateId };
-        patchState(id, { templateId });
+        patchState(id, { aiWanted: true, templateId });
       }}
       highlightOn={highlightOn}
       onToggleHighlight={toggleHighlight}
       useAi={useAi}
       aiForced={aiForced}
       onUseAi={(on) => {
-        workPrefRef.current = { aiWanted: on, templateId: active.templateId };
-        patchState(id, { aiWanted: on });
+        if (on) {
+          const templateId = workPrefRef.current?.templateId ?? active.templateId;
+          workPrefRef.current = { aiWanted: true, templateId };
+          patchState(id, { aiWanted: true, templateId });
+          return;
+        }
+        workPrefRef.current = {
+          aiWanted: false,
+          templateId: active.templateId !== 'plain' ? active.templateId : (workPrefRef.current?.templateId ?? 'plain'),
+        };
+        patchState(id, { aiWanted: false, templateId: 'plain' });
       }}
     />
   );

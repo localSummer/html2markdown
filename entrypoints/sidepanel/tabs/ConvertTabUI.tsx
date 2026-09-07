@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Copy, Download, MousePointerClick, ScanSearch, X } from 'lucide-react';
+import { Copy, Download, MousePointerClick, ScanSearch, Sparkles, X } from 'lucide-react';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -238,7 +239,7 @@ export function ConvertTabUI(props: {
                 <CardDescription>
                   {active.selected === 'custom' && active.picked
                     ? '已选定页面元素，可填写任务说明后转换'
-                    : '先扫描或指定区域，再转换（默认为本地，可开 AI 增强）'}
+                    : '先扫描或指定区域，再转换。笔记模板在 AI 模式下可用'}
                 </CardDescription>
               </div>
               <Label htmlFor="highlight-toggle" className="flex shrink-0 items-center gap-1.5 pt-0.5 text-xs text-muted-foreground">
@@ -345,27 +346,26 @@ export function ConvertTabUI(props: {
             )}
             {(active.picked || active.regions.length > 0 || active.fromHistory) && phase !== 'picking' && phase !== 'scanning' ? (
               <div className="mt-3 grid gap-1.5">
-                {useAi ? (
-                  <div className="mb-2 grid min-w-0 gap-1.5">
-                    <Label htmlFor="note-template">输出模板</Label>
-                    <Select
-                      value={active.templateId}
-                      disabled={converting}
-                      onValueChange={(value) => {
-                        setConfigTouched(true);
-                        onTemplate(value as TabState['templateId']);
-                      }}
-                    >
-                      <SelectTrigger id="note-template" className="w-full min-w-0"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="plain">普通 Markdown</SelectItem>
-                        {NOTE_TEMPLATES.map((template) => (
-                          <SelectItem key={template.id} value={template.id}>{template.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : null}
+                <div className="grid min-w-0 gap-1.5">
+                  <Label htmlFor="note-template">输出模板</Label>
+                  <Select
+                    value={useAi ? active.templateId : 'plain'}
+                    disabled={converting}
+                    onValueChange={(value) => {
+                      const templateId = value as TabState['templateId'];
+                      setConfigTouched(true);
+                      onTemplate(templateId);
+                    }}
+                  >
+                    <SelectTrigger id="note-template" className="w-full min-w-0"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="plain">普通 Markdown</SelectItem>
+                      {NOTE_TEMPLATES.map((template) => (
+                        <SelectItem key={template.id} value={template.id}>{template.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <Label htmlFor="task-prompt" className="text-muted-foreground">
                   {useAi && active.templateId !== 'plain' ? '补充要求（可选）' : '任务说明（可空；填写后走 AI 转换）'}
                 </Label>
@@ -480,18 +480,32 @@ export function ConvertTabUI(props: {
 
       <div className="shrink-0 space-y-2 border-t bg-gradient-to-t from-background to-card/40 p-3 backdrop-blur">
         {settings.text.apiKey ? (
-          <Label htmlFor="ai-enhance" className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{aiForced ? '任务说明已填写，将使用 AI 转换' : 'AI 增强'}</span>
-            <Switch
-              id="ai-enhance"
-              checked={useAi}
-              disabled={aiForced || phase === 'converting'}
-              onCheckedChange={(on) => {
+          <div className="grid gap-1.5">
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              value={useAi ? 'ai' : 'local'}
+              onValueChange={(value) => {
+                if (!value || aiForced || converting) return;
                 setConfigTouched(true);
-                onUseAi(on);
+                onUseAi(value === 'ai');
               }}
-            />
-          </Label>
+              className="grid w-full grid-cols-2"
+              aria-label="转换方式"
+            >
+              <ToggleGroupItem value="local" disabled={aiForced || converting} className="px-2">
+                本地
+              </ToggleGroupItem>
+              <ToggleGroupItem value="ai" disabled={aiForced || converting} className="px-2">
+                <Sparkles />
+                AI
+              </ToggleGroupItem>
+            </ToggleGroup>
+            {aiForced ? (
+              <p className="text-xs text-muted-foreground">任务说明已填写，将使用 AI 转换</p>
+            ) : null}
+          </div>
         ) : aiForced ? (
           <p className="text-xs text-muted-foreground">
             填写任务说明需要 API Key
