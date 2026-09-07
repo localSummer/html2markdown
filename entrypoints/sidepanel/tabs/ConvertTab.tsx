@@ -8,7 +8,7 @@ import { collectImagesFromHtml } from '../../../lib/dom/regions';
 import { refineReadableHtml } from '../../../lib/dom/readability';
 import type { ImageMeta, RegionType } from '../../../lib/messages';
 import { getUnsupportedReason } from '../../../lib/page-support';
-import { noteFormat } from '../../../lib/notes/templates';
+import { getNoteTemplate, noteFormat } from '../../../lib/notes/templates';
 import { resolveVisionApiKey, type Settings } from '../../../lib/settings';
 import { getActiveTab, sendToTab } from '../../../lib/tabs';
 import {
@@ -170,6 +170,10 @@ export function ConvertTab({
           if (cur.regions.length > 0 || cur.picked || (cur.markdown && !cur.fromHistory)) return prev;
           const r = getRefs(id);
           r.markdown = rec.markdown;
+          const historyTemplate = getNoteTemplate(rec.noteFormat?.templateId)?.id;
+          const nextConfig = historyTemplate
+            ? { aiWanted: true as const, templateId: historyTemplate }
+            : nextPageAiConfig(workPrefRef.current);
           return {
             ...prev,
             [id]: {
@@ -178,8 +182,13 @@ export function ConvertTab({
               markdown: rec.markdown,
               resultId: rec.id,
               resultNoteFormat: rec.noteFormat,
-              resultConfig: undefined,
+              resultConfig: {
+                useAi: Boolean(historyTemplate),
+                templateId: historyTemplate ?? 'plain',
+                taskPrompt: '',
+              },
               selected: rec.regionType,
+              ...nextConfig,
               phase: 'done',
               status: '',
               error: '',
@@ -794,7 +803,16 @@ export function ConvertTab({
         refs.markdown = '';
         patchState(id, { selected: r, markdown: '', fromHistory: false, visionHint: '' });
       }}
-      onTaskPrompt={(taskPrompt: string) => patchState(id, { taskPrompt })}
+      onTaskPrompt={(taskPrompt: string) => {
+        const wasForced = Boolean(active.taskPrompt.trim());
+        const nowForced = Boolean(taskPrompt.trim());
+        if (wasForced && !nowForced) {
+          workPrefRef.current = { aiWanted: true, templateId: active.templateId };
+          patchState(id, { taskPrompt, aiWanted: true });
+          return;
+        }
+        patchState(id, { taskPrompt });
+      }}
       onTemplate={(templateId) => {
         if (templateId === 'plain') {
           workPrefRef.current = {
