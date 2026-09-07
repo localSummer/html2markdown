@@ -20,7 +20,7 @@ import {
 import { fetchVisionImages } from '../../../lib/vision/fetch';
 import { copyWithFeedback, downloadWithFeedback } from '../feedback.ts';
 import { ConvertTabUI } from './ConvertTabUI.tsx';
-import { FRESH_STATE, type Phase, type TabState, type ReadingState } from './convert-types.ts';
+import { FRESH_STATE, nextPageAiConfig, type Phase, type TabState, type ReadingState, type WorkPref } from './convert-types.ts';
 
 type SessionSnap = Pick<TabState, 'phase' | 'regions' | 'selected' | 'picked' | 'taskPrompt'>;
 
@@ -82,15 +82,14 @@ export function ConvertTab({
   const [activeTabId, setActiveTabId] = useState<number | undefined>();
   const [states, setStates] = useState<Record<number, TabState>>({});
   const [highlightOn, setHighlightOn] = useState(true);
-  const [aiWanted, setAiWanted] = useState(false);
   const refsRef = useRef<Map<number, TabRefs>>(new Map());
   const prevActiveRef = useRef<number | undefined>(undefined);
   const paintHighlightOnScanRef = useRef(true);
   const scanRef = useRef<(opts?: { auto?: boolean }) => Promise<void>>(async () => {});
   const activeTabIdRef = useRef<number | undefined>(undefined);
-  const syncedUrlRef = useRef<string | undefined>(undefined);
   const hydrateBusyRef = useRef(0);
   const [hydrateGate, setHydrateGate] = useState(0);
+  const workPrefRef = useRef<WorkPref | null>(null);
 
   const active = activeTabId !== undefined ? states[activeTabId] : undefined;
   activeTabIdRef.current = activeTabId;
@@ -139,7 +138,7 @@ export function ConvertTab({
         regions: [],
         picked: null,
         taskPrompt: '',
-        templateId: 'plain',
+        ...nextPageAiConfig(workPrefRef.current),
         resultId: '',
         resultNoteFormat: undefined,
         resultConfig: undefined,
@@ -265,7 +264,7 @@ export function ConvertTab({
             regions: [],
             picked: null,
             taskPrompt: '',
-            templateId: 'plain',
+            ...nextPageAiConfig(workPrefRef.current),
             resultId: '',
             resultNoteFormat: undefined,
             resultConfig: undefined,
@@ -283,10 +282,6 @@ export function ConvertTab({
         return { ...prev, [nextId]: nextEntry };
       });
       setActiveTabId(nextId);
-      if (nextUrl !== syncedUrlRef.current) {
-        syncedUrlRef.current = nextUrl;
-        setAiWanted(false);
-      }
       void hydrateFromHistory(nextId, nextUrl);
     };
     void sync();
@@ -296,8 +291,6 @@ export function ConvertTab({
         resetTabScan(id);
         void getActiveTab().then((t) => {
           if (t?.id === id) {
-            syncedUrlRef.current = t.url;
-            if (id === activeTabIdRef.current) setAiWanted(false);
             patchState(id, {
               tabUrl: t.url,
               pageTitle: t.title ?? '',
@@ -385,7 +378,7 @@ export function ConvertTab({
   const phase = active.phase;
   const busy = phase === 'scanning' || phase === 'converting' || phase === 'picking';
   const aiForced = Boolean(active.taskPrompt.trim());
-  const useAi = aiForced || aiWanted;
+  const useAi = aiForced || active.aiWanted;
   const hasConvertTarget =
     active.selected === 'custom'
       ? Boolean(active.picked)
@@ -802,12 +795,18 @@ export function ConvertTab({
         patchState(id, { selected: r, markdown: '', fromHistory: false, visionHint: '' });
       }}
       onTaskPrompt={(taskPrompt: string) => patchState(id, { taskPrompt })}
-      onTemplate={(templateId) => patchState(id, { templateId })}
+      onTemplate={(templateId) => {
+        workPrefRef.current = { aiWanted: true, templateId };
+        patchState(id, { templateId });
+      }}
       highlightOn={highlightOn}
       onToggleHighlight={toggleHighlight}
       useAi={useAi}
       aiForced={aiForced}
-      onUseAi={setAiWanted}
+      onUseAi={(on) => {
+        workPrefRef.current = { aiWanted: on, templateId: active.templateId };
+        patchState(id, { aiWanted: on });
+      }}
     />
   );
 }

@@ -23,7 +23,7 @@ export function PreviewModeControl({ value, onChange, noteFormat }: {
     <ToggleGroup type="single" variant="outline" size="sm" value={value}
       onValueChange={(mode) => { if (mode) onChange(mode as PreviewMode); }} aria-label="结果视图">
       {noteFormat != null ? <ToggleGroupItem value="notes">笔记</ToggleGroupItem> : null}
-      <ToggleGroupItem value="preview">{noteFormat != null ? 'MD' : '预览'}</ToggleGroupItem>
+      <ToggleGroupItem value="preview">{noteFormat != null ? 'Markdown' : '预览'}</ToggleGroupItem>
       <ToggleGroupItem value="source">源码</ToggleGroupItem>
     </ToggleGroup>
   );

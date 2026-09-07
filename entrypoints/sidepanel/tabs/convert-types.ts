@@ -15,6 +15,15 @@ export type PickedRegion = {
   charCount: number;
 };
 
+export type WorkPref = {
+  aiWanted: boolean;
+  templateId: NoteTemplateId | 'plain';
+};
+
+export function nextPageAiConfig(pref: WorkPref | null): WorkPref {
+  return pref ?? { aiWanted: false, templateId: 'plain' };
+}
+
 export type TabState = {
   tabUrl: string | undefined;
   pageTitle: string;
@@ -26,6 +35,7 @@ export type TabState = {
   selected: RegionType;
   picked: PickedRegion | null;
   taskPrompt: string;
+  aiWanted: boolean;
   templateId: NoteTemplateId | 'plain';
   resultId: string;
   resultNoteFormat?: HistoryRecord['noteFormat'];
@@ -47,6 +57,7 @@ export const FRESH_STATE: TabState = {
   selected: 'main',
   picked: null,
   taskPrompt: '',
+  aiWanted: false,
   templateId: 'plain',
   resultId: '',
   markdown: '',
