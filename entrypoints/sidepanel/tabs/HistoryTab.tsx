@@ -12,7 +12,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { FullscreenButton, MarkdownFullscreen, MarkdownScrollBox } from '../markdown-view.tsx';
+import { FullscreenButton, MarkdownFullscreen, MarkdownScrollBox, PreviewModeControl, type PreviewMode } from '../markdown-view.tsx';
+import { getNoteTemplate } from '../../../lib/notes/templates';
 import { copyWithFeedback, downloadWithFeedback } from '../feedback.ts';
 
 export function HistoryTab({ active = true }: { active?: boolean }) {
@@ -22,6 +23,9 @@ export function HistoryTab({ active = true }: { active?: boolean }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
   const [fullId, setFullId] = useState<string | null>(null);
+  const [views, setViews] = useState<Record<string, PreviewMode>>({});
+  const viewFor = (row: HistoryRecord): PreviewMode => views[row.id] ?? (row.noteFormat ? 'notes' : 'preview');
+  const chooseView = (id: string, mode: PreviewMode) => setViews((prev) => ({ ...prev, [id]: mode }));
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const reload = async () => {
@@ -124,6 +128,7 @@ export function HistoryTab({ active = true }: { active?: boolean }) {
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium">{r.title}</div>
                     <div className="mt-0.5 truncate text-xs text-muted-foreground">{r.url}</div>
+                    {r.noteFormat ? <div className="mt-1 text-xs text-muted-foreground">{getNoteTemplate(r.noteFormat.templateId)?.label ?? '笔记'}</div> : null}
                   </div>
                   <ChevronDown
                     className={`mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-300 ${
@@ -192,9 +197,11 @@ export function HistoryTab({ active = true }: { active?: boolean }) {
                             删除
                           </Button>
                         </div>
+                        <PreviewModeControl value={viewFor(r)} onChange={(mode) => chooseView(r.id, mode)} noteFormat={r.noteFormat} />
                         <MarkdownScrollBox
                           markdown={r.markdown}
-                          previewMode="preview"
+                          previewMode={viewFor(r)}
+                          noteFormat={r.noteFormat}
                           maxHeightClass="max-h-56"
                         />
                       </CardContent>
@@ -209,8 +216,9 @@ export function HistoryTab({ active = true }: { active?: boolean }) {
       )}
 
       {fullRow ? (
-        <MarkdownFullscreen open title={fullRow.title} onClose={() => setFullId(null)}>
-          <MarkdownScrollBox markdown={fullRow.markdown} previewMode="preview" fill />
+        <MarkdownFullscreen open title={fullRow.title} onClose={() => setFullId(null)}
+          toolbar={<PreviewModeControl value={viewFor(fullRow)} onChange={(mode) => chooseView(fullRow.id, mode)} noteFormat={fullRow.noteFormat} />}>
+          <MarkdownScrollBox markdown={fullRow.markdown} previewMode={viewFor(fullRow)} noteFormat={fullRow.noteFormat} fill />
         </MarkdownFullscreen>
       ) : null}
     </div>

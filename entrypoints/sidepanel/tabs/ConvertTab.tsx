@@ -8,6 +8,7 @@ import { collectImagesFromHtml } from '../../../lib/dom/regions';
 import { refineReadableHtml } from '../../../lib/dom/readability';
 import type { ImageMeta, RegionType } from '../../../lib/messages';
 import { getUnsupportedReason } from '../../../lib/page-support';
+import { noteFormat } from '../../../lib/notes/templates';
 import { resolveVisionApiKey, type Settings } from '../../../lib/settings';
 import { getActiveTab, sendToTab } from '../../../lib/tabs';
 import {
@@ -19,11 +20,12 @@ import {
 import { fetchVisionImages } from '../../../lib/vision/fetch';
 import { copyWithFeedback, downloadWithFeedback } from '../feedback.ts';
 import { ConvertTabUI } from './ConvertTabUI.tsx';
-import { FRESH_STATE, type Phase, type TabState } from './convert-types.ts';
+import { FRESH_STATE, type Phase, type TabState, type ReadingState } from './convert-types.ts';
 
 type SessionSnap = Pick<TabState, 'phase' | 'regions' | 'selected' | 'picked' | 'taskPrompt'>;
 
 type TabRefs = {
+  reader: ReadingState;
   markdown: string;
   abort: AbortController | null;
   scanGen: number;
@@ -79,7 +81,6 @@ export function ConvertTab({
 }) {
   const [activeTabId, setActiveTabId] = useState<number | undefined>();
   const [states, setStates] = useState<Record<number, TabState>>({});
-  const [previewMode, setPreviewMode] = useState<'preview' | 'source'>('preview');
   const [highlightOn, setHighlightOn] = useState(true);
   const [aiWanted, setAiWanted] = useState(false);
   const refsRef = useRef<Map<number, TabRefs>>(new Map());
@@ -98,6 +99,7 @@ export function ConvertTab({
     let r = refsRef.current.get(id);
     if (!r) {
       r = {
+        reader: { resultId: '', previewMode: 'preview', interrupted: false },
         markdown: '',
         abort: null,
         scanGen: 0,
@@ -137,6 +139,10 @@ export function ConvertTab({
         regions: [],
         picked: null,
         taskPrompt: '',
+        templateId: 'plain',
+        resultId: '',
+        resultNoteFormat: undefined,
+        resultConfig: undefined,
         markdown: '',
         phase: 'idle',
         status: '',
@@ -171,6 +177,9 @@ export function ConvertTab({
               ...cur,
               pageTitle: rec.title || cur.pageTitle,
               markdown: rec.markdown,
+              resultId: rec.id,
+              resultNoteFormat: rec.noteFormat,
+              resultConfig: undefined,
               selected: rec.regionType,
               phase: 'done',
               status: '',
@@ -256,6 +265,10 @@ export function ConvertTab({
             regions: [],
             picked: null,
             taskPrompt: '',
+            templateId: 'plain',
+            resultId: '',
+            resultNoteFormat: undefined,
+            resultConfig: undefined,
             markdown: '',
             phase: 'idle',
             status: '',
@@ -625,9 +638,17 @@ export function ConvertTab({
     }
     const ac = new AbortController();
     refs.abort = ac;
+    const format = useAiRun ? noteFormat(active.templateId) : undefined;
     refs.markdown = '';
     patchState(id, {
       phase: 'converting',
+      resultId: crypto.randomUUID(),
+      resultNoteFormat: format,
+      resultConfig: {
+        useAi: useAiRun,
+        templateId: format?.templateId ?? 'plain',
+        taskPrompt: active.taskPrompt.trim(),
+      },
       markdown: '',
       status: '正在提取当前区域…',
       error: '',
@@ -659,7 +680,9 @@ export function ConvertTab({
           apiKey: settings.text.apiKey,
           model: settings.text.model,
           taskPrompt: active.taskPrompt,
+          noteFormat: format,
           onDelta: (delta) => {
+            if (ac.signal.aborted || refs.abort !== ac) return;
             refs.markdown += delta;
             if (refs.paintTimer != null) return;
             refs.paintTimer = setTimeout(() => {
@@ -681,6 +704,8 @@ export function ConvertTab({
         if (ac.signal.aborted) throw new DOMException('已取消', 'AbortError');
         md = htmlToMarkdown(html);
       }
+      ac.signal.throwIfAborted();
+      if (refs.abort !== ac) return;
       refs.markdown = md;
       const runVisionNow = useAiRun && settings.visionEnabled;
       patchState(id, {
@@ -696,6 +721,9 @@ export function ConvertTab({
         );
         patchState(id, { status: '正在识别图片…', progress: 86 });
         finalMd = await runVision(visionImages, md, ac.signal);
+        ac.signal.throwIfAborted();
+        if (refs.abort !== ac) return;
+        refs.markdown = finalMd;
         patchState(id, { markdown: finalMd, progress: 96 });
       }
       await addRecord(
@@ -705,11 +733,20 @@ export function ConvertTab({
           regionType: active.selected,
           visionEnabled: runVisionNow,
           markdown: finalMd,
+          ...(format ? { noteFormat: format } : {}),
         },
         settings.historyLimit,
       );
+      if (refs.abort !== ac) return;
+      ac.signal.throwIfAborted();
       patchState(id, { phase: 'done', status: '', progress: 100, fromHistory: false });
     } catch (err) {
+      if (refs.abort !== ac) return;
+      if (refs.paintTimer != null) {
+        clearTimeout(refs.paintTimer);
+        refs.paintTimer = null;
+      }
+      patchState(id, { markdown: refs.markdown });
       if (err instanceof DOMException && err.name === 'AbortError') {
         patchState(id, { phase: 'cancelled', status: '', error: '已取消' });
       } else {
@@ -726,13 +763,12 @@ export function ConvertTab({
     <ConvertTabUI
       key={id}
       active={active}
+      reader={refs.reader}
       phase={phase}
       busy={busy}
       canConvert={canConvert}
       complete={complete}
       displayVisionHint={displayVisionHint}
-      previewMode={previewMode}
-      setPreviewMode={setPreviewMode}
       settings={settings}
       onOpenSettings={onOpenSettings}
       onScan={() => void scan()}
@@ -766,6 +802,7 @@ export function ConvertTab({
         patchState(id, { selected: r, markdown: '', fromHistory: false, visionHint: '' });
       }}
       onTaskPrompt={(taskPrompt: string) => patchState(id, { taskPrompt })}
+      onTemplate={(templateId) => patchState(id, { templateId })}
       highlightOn={highlightOn}
       onToggleHighlight={toggleHighlight}
       useAi={useAi}

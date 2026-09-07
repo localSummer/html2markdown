@@ -1,6 +1,14 @@
 import type { RegionSummary, RegionType } from '../../../lib/messages';
+import type { NoteTemplateId } from '../../../lib/notes/templates';
+import type { HistoryRecord } from '../../../lib/history/db';
 
 export type Phase = 'idle' | 'scanning' | 'picking' | 'ready' | 'converting' | 'done' | 'cancelled';
+
+export type ReadingState = {
+  resultId: string;
+  previewMode: 'notes' | 'preview' | 'source';
+  interrupted: boolean;
+};
 
 export type PickedRegion = {
   tag: string;
@@ -18,6 +26,10 @@ export type TabState = {
   selected: RegionType;
   picked: PickedRegion | null;
   taskPrompt: string;
+  templateId: NoteTemplateId | 'plain';
+  resultId: string;
+  resultNoteFormat?: HistoryRecord['noteFormat'];
+  resultConfig?: { useAi: boolean; templateId: string; taskPrompt: string };
   markdown: string;
   visionHint: string;
   progress: number;
@@ -35,6 +47,8 @@ export const FRESH_STATE: TabState = {
   selected: 'main',
   picked: null,
   taskPrompt: '',
+  templateId: 'plain',
+  resultId: '',
   markdown: '',
   visionHint: '',
   progress: 0,

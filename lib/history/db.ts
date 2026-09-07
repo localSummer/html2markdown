@@ -8,6 +8,7 @@ export type HistoryRecord = {
   regionType: RegionType;
   visionEnabled: boolean;
   markdown: string;
+  noteFormat?: { templateId: string; version: number };
 };
 
 const DB_NAME = 'html2md';

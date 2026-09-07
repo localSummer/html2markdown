@@ -74,6 +74,22 @@ describe('matchesQuery', () => {
 });
 
 describe('addRecord fifo', () => {
+  it('keeps legacy records and versioned note formats together without changing the body', async () => {
+    await clearRecords();
+    const base = { title: 'note', url: 'https://ex.com/note', regionType: 'main' as const, visionEnabled: false };
+    await addRecord({ ...base, markdown: 'legacy', createdAt: 1 }, 10);
+    const markdown = '# 主题\n\n## 提示：问题\n\n回答\n\n## 总结\n\n总结';
+    await addRecord({ ...base, markdown, noteFormat: { templateId: 'cornell', version: 1 }, createdAt: 2 }, 10);
+    await addRecord({ ...base, markdown: 'future', noteFormat: { templateId: 'future', version: 2 }, createdAt: 3 }, 10);
+    const rows = await listRecords();
+    expect(rows[0]?.noteFormat).toEqual({ templateId: 'future', version: 2 });
+    expect(rows[1]?.noteFormat).toEqual({ templateId: 'cornell', version: 1 });
+    expect(rows[1]?.markdown).toBe(markdown);
+    expect(rows[2]?.noteFormat).toBeUndefined();
+    expect(rows[2]?.markdown).toBe('legacy');
+    expect((await findLatestByUrl(base.url))?.markdown).toBe('future');
+  });
+
   it('evicts oldest beyond limit', async () => {
     await clearRecords();
     await addRecord(

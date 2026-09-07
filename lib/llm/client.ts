@@ -1,4 +1,5 @@
 import { buildConvertMessages, completionsUrl, modelsUrl } from './prompt';
+import type { NoteFormat } from '../notes/templates';
 
 export type StreamCallbacks = {
   onDelta: (text: string) => void;
@@ -135,13 +136,14 @@ export async function convertHtmlToMarkdown(options: {
   apiKey: string;
   model: string;
   taskPrompt?: string;
+  noteFormat?: NoteFormat;
   onDelta: (text: string) => void;
   signal?: AbortSignal;
 }): Promise<string> {
-  const { html, taskPrompt, ...rest } = options;
+  const { html, taskPrompt, noteFormat, ...rest } = options;
   return chatCompletions({
     ...rest,
     stream: true,
-    messages: buildConvertMessages(html, taskPrompt),
+    messages: buildConvertMessages(html, taskPrompt, noteFormat),
   });
 }

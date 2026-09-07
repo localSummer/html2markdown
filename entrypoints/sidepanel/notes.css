@@ -1,0 +1,67 @@
+.html2md-notes-container {
+  container: note-preview / inline-size;
+  min-width: 0;
+  width: 100%;
+}
+.html2md-note,
+.html2md-note * {
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  letter-spacing: 0;
+}
+.html2md-note {
+  line-height: 1.65;
+}
+.html2md-note .html2md-md-prose :is(h1, h2, h3, h4, h5, h6) {
+  line-height: 1.4;
+  margin-block: 0.8em 0.5em;
+}
+.html2md-note .html2md-md-prose h1 { font-size: 1.45em; }
+.html2md-note .html2md-md-prose h2 { font-size: 1.12em; }
+.html2md-note .html2md-md-prose h3 { font-size: 1.05em; }
+.html2md-note :is(pre, table) { max-width: 100%; overflow-x: auto; }
+.html2md-note pre { white-space: pre; overflow-wrap: normal; }
+.html2md-note pre code { overflow-wrap: normal; word-break: normal; }
+.html2md-note :not(pre) > code { white-space: break-spaces; overflow-wrap: anywhere; }
+.html2md-note img { max-width: 100%; height: auto; }
+.html2md-note table { display: block; }
+.html2md-note :is(ul, ol) { padding-inline-start: 1.25em; }
+.html2md-note :is(ul, ol) :is(ul, ol) { padding-inline-start: 0.9em; }
+.html2md-note-title { border-bottom: 2px solid var(--border); padding-bottom: 0.65em; }
+.html2md-note-preamble { padding-block: 0.5em; }
+.html2md-note-section { border-bottom: 1px solid var(--border); padding-block: 0.85em; }
+.html2md-note-heading .html2md-md-prose > :first-child,
+.html2md-note-body .html2md-md-prose > :first-child { margin-top: 0; }
+.html2md-note-body .html2md-md-prose > :last-child { margin-bottom: 0; }
+.html2md-note summary { cursor: pointer; }
+.html2md-note summary > div { display: inline; }
+.html2md-note summary .html2md-md-prose h2 { display: inline; }
+.html2md-note details > .html2md-note-body { padding-top: 0.75em; }
+.html2md-note summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; }
+.html2md-note-tools { display: flex; flex-wrap: wrap; gap: 0.5em; padding-top: 0.75em; }
+.html2md-note-tools button { height: auto; min-height: 2rem; white-space: normal; }
+.html2md-note-fallback { color: var(--muted-foreground); font-size: 0.875em; }
+.html2md-note-cornell .html2md-note-heading { color: var(--primary); }
+.html2md-note-summary { border-top: 2px solid var(--border); }
+.html2md-note-reading .html2md-note-heading { border-inline-start: 3px solid var(--primary); padding-inline-start: 0.65em; }
+.html2md-note-reading .html2md-note-section:last-child .html2md-note-heading { border-color: var(--muted-foreground); }
+.html2md-note-steps ol > li::marker { font-weight: 700; color: var(--primary); }
+.html2md-note-comparison table { width: 100%; }
+@container note-preview (min-width: 440px) {
+  .html2md-note-cornell .html2md-note-section:not(.html2md-note-summary) {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 7fr);
+  }
+  .html2md-note-cornell .html2md-note-section:not(.html2md-note-summary) > .html2md-note-heading { padding-inline-end: 0.8em; }
+  .html2md-note-cornell .html2md-note-section:not(.html2md-note-summary) > .html2md-note-body { border-inline-start: 1px solid var(--border); padding-inline-start: 0.8em; }
+  .html2md-note-comparison table { display: table; table-layout: fixed; }
+}
+@container note-preview (max-width: 439px) {
+  .html2md-note-comparison :is(table, tbody, tr, td) { display: block; width: 100%; }
+  .html2md-note-comparison thead { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
+  .html2md-note-comparison tbody tr { border-bottom: 1px solid var(--border); padding-block: 0.5em; }
+  .html2md-note-comparison tbody td { border: 0; padding: 0.35em 0; text-align: start; }
+  .html2md-note-comparison td::before { content: attr(data-label); display: block; color: var(--muted-foreground); font-weight: 600; font-size: 0.9em; }
+  .html2md-note-comparison tbody td:first-child { font-weight: 600; }
+}

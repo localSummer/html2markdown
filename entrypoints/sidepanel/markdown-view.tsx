@@ -5,12 +5,29 @@ import remarkGfm from 'remark-gfm';
 import { Maximize2, Minimize2, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { NotesView, rehypeNoteTables } from './notes-view';
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 4;
 const ZOOM_STEP = 0.25;
 
-type PreviewMode = 'preview' | 'source';
+export type PreviewMode = 'notes' | 'preview' | 'source';
+
+export function PreviewModeControl({ value, onChange, noteFormat }: {
+  value: PreviewMode;
+  onChange: (mode: PreviewMode) => void;
+  noteFormat?: unknown;
+}) {
+  return (
+    <ToggleGroup type="single" variant="outline" size="sm" value={value}
+      onValueChange={(mode) => { if (mode) onChange(mode as PreviewMode); }} aria-label="结果视图">
+      {noteFormat != null ? <ToggleGroupItem value="notes">笔记</ToggleGroupItem> : null}
+      <ToggleGroupItem value="preview">{noteFormat != null ? 'MD' : '预览'}</ToggleGroupItem>
+      <ToggleGroupItem value="source">源码</ToggleGroupItem>
+    </ToggleGroup>
+  );
+}
 
 type Shot = { src: string; alt: string };
 
@@ -136,14 +153,17 @@ export const MD_PROSE_CLASS =
 export function MarkdownPreview({
   markdown,
   onOpenImage,
+  comparison = false,
 }: {
   markdown: string;
   onOpenImage?: (shot: Shot) => void;
+  comparison?: boolean;
 }) {
   return (
     <div className={MD_PROSE_CLASS}>
       <Markdown
         remarkPlugins={[remarkGfm]}
+        rehypePlugins={comparison ? [rehypeNoteTables] : []}
         components={{
           img: ({ src, alt }) => {
             if (!src) return null;
@@ -170,12 +190,16 @@ export function MarkdownScrollBox({
   converting = false,
   fill = false,
   maxHeightClass = 'max-h-[55vh]',
+  noteFormat,
+  onUserScrollAway,
 }: {
   markdown: string;
   previewMode: PreviewMode;
   converting?: boolean;
   fill?: boolean;
   maxHeightClass?: string;
+  noteFormat?: unknown;
+  onUserScrollAway?: () => void;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -234,16 +258,23 @@ export function MarkdownScrollBox({
             if (!el) return;
             if (el.scrollHeight - el.scrollTop - el.clientHeight > 40) {
               stickRef.current = false;
+              onUserScrollAway?.();
             }
           }}
           className="html2md-scroll-body"
         >
           <div ref={contentRef} className="px-4">
             <div className="html2md-view-swap">
-              <div className="html2md-view" data-active={previewMode === 'preview' ? 'true' : 'false'}>
+              <div className="html2md-view" data-active={previewMode === 'notes' ? 'true' : 'false'} inert={previewMode !== 'notes'} aria-hidden={previewMode !== 'notes'}>
+                {previewMode === 'notes' ? converting ? <MarkdownPreview markdown={markdown} onOpenImage={setShot} /> : (
+                  <NotesView markdown={markdown} noteFormat={noteFormat}
+                    renderMarkdown={(text, comparison) => <MarkdownPreview markdown={text} onOpenImage={setShot} comparison={comparison} />} />
+                ) : null}
+              </div>
+              <div className="html2md-view" data-active={previewMode === 'preview' ? 'true' : 'false'} inert={previewMode !== 'preview'} aria-hidden={previewMode !== 'preview'}>
                 <MarkdownPreview markdown={markdown} onOpenImage={setShot} />
               </div>
-              <div className="html2md-view" data-active={previewMode === 'source' ? 'true' : 'false'}>
+              <div className="html2md-view" data-active={previewMode === 'source' ? 'true' : 'false'} inert={previewMode !== 'source'} aria-hidden={previewMode !== 'source'}>
                 <pre className="html2md-md-source whitespace-pre-wrap break-words">{markdown}</pre>
               </div>
             </div>

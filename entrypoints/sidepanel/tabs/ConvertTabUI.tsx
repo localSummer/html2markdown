@@ -9,14 +9,15 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { FullscreenButton, MarkdownFullscreen, MarkdownScrollBox } from '../markdown-view.tsx';
+import { FullscreenButton, MarkdownFullscreen, MarkdownScrollBox, PreviewModeControl, type PreviewMode } from '../markdown-view.tsx';
+import { getNoteTemplate, NOTE_TEMPLATES } from '../../../lib/notes/templates';
 import type { RegionType } from '../../../lib/messages';
 import type { Settings } from '../../../lib/settings';
-import type { Phase, TabState } from './convert-types.ts';
+import type { Phase, TabState, ReadingState } from './convert-types.ts';
 
 const REGION_LABELS: Record<RegionType, string> = {
   main: '主内容',
@@ -57,13 +58,12 @@ function ProgressBar({
 
 export function ConvertTabUI(props: {
   active: TabState;
+  reader: ReadingState;
   phase: Phase;
   busy: boolean;
   canConvert: boolean;
   complete: boolean;
   displayVisionHint: string;
-  previewMode: 'preview' | 'source';
-  setPreviewMode: (m: 'preview' | 'source') => void;
   settings: Settings;
   onOpenSettings: () => void;
   onScan: () => void;
@@ -76,6 +76,7 @@ export function ConvertTabUI(props: {
   onHighlight: (r: RegionType | null) => void;
   onSelect: (r: RegionType) => void;
   onTaskPrompt: (prompt: string) => void;
+  onTemplate: (templateId: TabState['templateId']) => void;
   highlightOn: boolean;
   onToggleHighlight: (on: boolean) => void;
   useAi: boolean;
@@ -84,13 +85,12 @@ export function ConvertTabUI(props: {
 }) {
   const {
     active,
+    reader,
     phase,
     busy,
     canConvert,
     complete,
     displayVisionHint,
-    previewMode,
-    setPreviewMode,
     settings,
     onOpenSettings,
     onScan,
@@ -103,6 +103,7 @@ export function ConvertTabUI(props: {
     onHighlight,
     onSelect,
     onTaskPrompt,
+    onTemplate,
     highlightOn,
     onToggleHighlight,
     useAi,
@@ -119,13 +120,45 @@ export function ConvertTabUI(props: {
       err.includes('稍后重试'));
   const goSettings = err.includes('密钥无效') || err.includes('API Key 为空');
   const [full, setFull] = useState(false);
-  const resultTitle = active.fromHistory ? '结果（来自历史）' : '结果';
+  const [previewMode, setPreviewMode] = useState<PreviewMode>(reader.previewMode);
+  const [configTouched, setConfigTouched] = useState(false);
+  const resultLabel = getNoteTemplate(active.resultNoteFormat?.templateId)?.label;
+  const resultTitle = `${resultLabel || '结果'}${active.fromHistory ? '（来自历史）' : ''}`;
   const converting = phase === 'converting';
+  const configChanged = active.resultConfig
+    ? active.resultConfig.useAi !== useAi ||
+      active.resultConfig.templateId !== (useAi ? active.templateId : 'plain') ||
+      active.resultConfig.taskPrompt !== active.taskPrompt.trim()
+    : active.fromHistory && configTouched;
   const outerRef = useRef<HTMLDivElement>(null);
   const outerStickRef = useRef(true);
   const outerSkipRef = useRef(false);
   const outerSmoothedRef = useRef(false);
   const outerSmoothTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useLayoutEffect(() => {
+    if (reader.resultId !== active.resultId) {
+      reader.resultId = active.resultId;
+      reader.interrupted = false;
+      reader.previewMode = active.resultNoteFormat && !converting ? 'notes' : 'preview';
+    }
+    setConfigTouched(false);
+    setPreviewMode(reader.previewMode);
+  }, [active.resultId]);
+
+  useEffect(() => {
+    if (phase === 'done' && active.resultNoteFormat && !reader.interrupted) {
+      reader.previewMode = 'notes';
+      setPreviewMode('notes');
+    }
+  }, [phase, active.resultId]);
+
+  const choosePreview = (mode: PreviewMode) => {
+    reader.interrupted = true;
+    reader.previewMode = mode;
+    setPreviewMode(mode);
+  };
+  const stopAutoPreview = () => { reader.interrupted = true; };
 
   useEffect(() => {
     if (converting) {
@@ -177,6 +210,7 @@ export function ConvertTabUI(props: {
             if (!el) return;
             if (el.scrollHeight - el.scrollTop - el.clientHeight > 40) {
               outerStickRef.current = false;
+              stopAutoPreview();
             }
           }}
         >
@@ -309,16 +343,40 @@ export function ConvertTabUI(props: {
             ) : (
               <p className="text-xs text-muted-foreground">尚未扫描。</p>
             )}
-            {(active.picked || active.regions.length > 0) && phase !== 'picking' && phase !== 'scanning' ? (
+            {(active.picked || active.regions.length > 0 || active.fromHistory) && phase !== 'picking' && phase !== 'scanning' ? (
               <div className="mt-3 grid gap-1.5">
+                {useAi ? (
+                  <div className="mb-2 grid min-w-0 gap-1.5">
+                    <Label htmlFor="note-template">输出模板</Label>
+                    <Select
+                      value={active.templateId}
+                      disabled={converting}
+                      onValueChange={(value) => {
+                        setConfigTouched(true);
+                        onTemplate(value as TabState['templateId']);
+                      }}
+                    >
+                      <SelectTrigger id="note-template" className="w-full min-w-0"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="plain">普通 Markdown</SelectItem>
+                        {NOTE_TEMPLATES.map((template) => (
+                          <SelectItem key={template.id} value={template.id}>{template.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
                 <Label htmlFor="task-prompt" className="text-muted-foreground">
-                  任务说明（可空；填写后走 AI 转换）
+                  {useAi && active.templateId !== 'plain' ? '补充要求（可选）' : '任务说明（可空；填写后走 AI 转换）'}
                 </Label>
                 <textarea
                   id="task-prompt"
                   value={active.taskPrompt}
                   disabled={converting}
-                  onChange={(e) => onTaskPrompt(e.target.value)}
+                  onChange={(e) => {
+                    setConfigTouched(true);
+                    onTaskPrompt(e.target.value);
+                  }}
                   placeholder="例如：转成 Markdown；用三条要点总结"
                   rows={3}
                   className="placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input w-full min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-60"
@@ -368,18 +426,9 @@ export function ConvertTabUI(props: {
           <Card className="gap-3 py-4">
             <CardHeader className="px-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <CardTitle>{resultTitle}</CardTitle>
+                  <CardTitle className="min-w-0 break-words">{resultTitle}</CardTitle>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <ToggleGroup
-                    type="single"
-                    variant="outline"
-                    size="sm"
-                    value={previewMode}
-                    onValueChange={(v) => v && setPreviewMode(v as 'preview' | 'source')}
-                  >
-                    <ToggleGroupItem value="preview">预览</ToggleGroupItem>
-                    <ToggleGroupItem value="source">源码</ToggleGroupItem>
-                  </ToggleGroup>
+                  <PreviewModeControl value={previewMode} onChange={choosePreview} noteFormat={active.resultNoteFormat} />
                   <Button variant="outline" size="sm" disabled={!complete} onClick={onCopy}>
                     <Copy />
                     复制
@@ -393,10 +442,16 @@ export function ConvertTabUI(props: {
               </div>
             </CardHeader>
             <CardContent className="px-4">
+              {configChanged && !converting ? (
+                <p className="mb-2 text-xs text-muted-foreground" role="status">配置已变更，待重新生成</p>
+              ) : null}
               <MarkdownScrollBox
+                key={active.resultId}
                 markdown={active.markdown}
                 previewMode={previewMode}
                 converting={converting}
+                noteFormat={active.resultNoteFormat}
+                onUserScrollAway={stopAutoPreview}
               />
             </CardContent>
           </Card>
@@ -409,22 +464,16 @@ export function ConvertTabUI(props: {
           title={resultTitle}
           onClose={() => setFull(false)}
           toolbar={
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              size="sm"
-              value={previewMode}
-              onValueChange={(v) => v && setPreviewMode(v as 'preview' | 'source')}
-            >
-              <ToggleGroupItem value="preview">预览</ToggleGroupItem>
-              <ToggleGroupItem value="source">源码</ToggleGroupItem>
-            </ToggleGroup>
+            <PreviewModeControl value={previewMode} onChange={choosePreview} noteFormat={active.resultNoteFormat} />
           }
         >
           <MarkdownScrollBox
+            key={active.resultId}
             markdown={active.markdown}
             previewMode={previewMode}
             converting={converting}
+            noteFormat={active.resultNoteFormat}
+            onUserScrollAway={stopAutoPreview}
             fill
           />
         </MarkdownFullscreen>
@@ -437,7 +486,10 @@ export function ConvertTabUI(props: {
               id="ai-enhance"
               checked={useAi}
               disabled={aiForced || phase === 'converting'}
-              onCheckedChange={onUseAi}
+              onCheckedChange={(on) => {
+                setConfigTouched(true);
+                onUseAi(on);
+              }}
             />
           </Label>
         ) : aiForced ? (
