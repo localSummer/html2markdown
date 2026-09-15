@@ -15,6 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { FullscreenButton, MarkdownFullscreen, MarkdownScrollBox, PreviewModeControl, type PreviewMode } from '../markdown-view.tsx';
+import { useStickToBottom } from '../use-stick-to-bottom';
 import { getNoteTemplate, NOTE_TEMPLATES } from '../../../lib/notes/templates';
 import type { RegionType } from '../../../lib/messages';
 import type { Settings } from '../../../lib/settings';
@@ -131,11 +132,13 @@ export function ConvertTabUI(props: {
       active.resultConfig.templateId !== (useAi ? active.templateId : 'plain') ||
       active.resultConfig.taskPrompt !== active.taskPrompt.trim()
     : active.fromHistory && configTouched;
+  const stopAutoPreview = () => { reader.interrupted = true; };
   const outerRef = useRef<HTMLDivElement>(null);
-  const outerStickRef = useRef(true);
-  const outerSkipRef = useRef(false);
-  const outerSmoothedRef = useRef(false);
-  const outerSmoothTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { pin: pinOuter, onScroll: onOuterScroll, onWheel: onOuterWheel } = useStickToBottom(
+    outerRef,
+    converting,
+    stopAutoPreview,
+  );
 
   useLayoutEffect(() => {
     if (reader.resultId !== active.resultId) {
@@ -159,45 +162,11 @@ export function ConvertTabUI(props: {
     reader.previewMode = mode;
     setPreviewMode(mode);
   };
-  const stopAutoPreview = () => { reader.interrupted = true; };
-
-  useEffect(() => {
-    if (converting) {
-      outerStickRef.current = true;
-      outerSmoothedRef.current = false;
-    }
-    return () => {
-      if (outerSmoothTimer.current) clearTimeout(outerSmoothTimer.current);
-    };
-  }, [converting]);
 
   useLayoutEffect(() => {
-    if (!converting || !outerStickRef.current) return;
-    const el = outerRef.current;
-    if (!el || !active.markdown) return;
-
-    if (!outerSmoothedRef.current) {
-      outerSmoothedRef.current = true;
-      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (!reduceMotion) {
-        outerSkipRef.current = true;
-        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-        if (outerSmoothTimer.current) clearTimeout(outerSmoothTimer.current);
-        outerSmoothTimer.current = setTimeout(() => {
-          outerSkipRef.current = false;
-          outerSmoothTimer.current = null;
-        }, 420);
-        return;
-      }
-    }
-
-    if (outerSkipRef.current) return;
-    outerSkipRef.current = true;
-    el.scrollTop = el.scrollHeight;
-    requestAnimationFrame(() => {
-      outerSkipRef.current = false;
-    });
-  }, [converting, active.markdown]);
+    if (!active.markdown) return;
+    pinOuter();
+  }, [converting, active.markdown, pinOuter]);
 
   return (
     <div className="flex h-full min-h-0 flex-col text-sm">
@@ -205,15 +174,8 @@ export function ConvertTabUI(props: {
         <div
           ref={outerRef}
           className="html2md-scroll-body space-y-3 px-3"
-          onScroll={() => {
-            if (outerSkipRef.current || !converting) return;
-            const el = outerRef.current;
-            if (!el) return;
-            if (el.scrollHeight - el.scrollTop - el.clientHeight > 40) {
-              outerStickRef.current = false;
-              stopAutoPreview();
-            }
-          }}
+          onScroll={onOuterScroll}
+          onWheel={onOuterWheel}
         >
         {active.unsupported ? (
           <Alert variant="warning">

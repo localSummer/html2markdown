@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { NotesView, rehypeNoteTables } from './notes-view';
+import { useStickToBottom } from './use-stick-to-bottom';
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 4;
@@ -203,42 +204,17 @@ export function MarkdownScrollBox({
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const stickRef = useRef(true);
-  const skipRef = useRef(false);
   const [shot, setShot] = useState<Shot | null>(null);
-
-  useEffect(() => {
-    if (converting) stickRef.current = true;
-  }, [converting]);
-
-  useEffect(() => {
-    if (!converting || !stickRef.current) return;
-    const el = boxRef.current;
-    if (!el) return;
-    skipRef.current = true;
-    el.scrollTop = el.scrollHeight;
-    requestAnimationFrame(() => {
-      skipRef.current = false;
-    });
-  }, [markdown, converting, previewMode]);
+  const { pin, onScroll, onWheel } = useStickToBottom(boxRef, converting, onUserScrollAway);
 
   useEffect(() => {
     if (!converting) return;
     const content = contentRef.current;
     if (!content) return;
-    const ro = new ResizeObserver(() => {
-      if (!stickRef.current) return;
-      const el = boxRef.current;
-      if (!el) return;
-      skipRef.current = true;
-      el.scrollTop = el.scrollHeight;
-      requestAnimationFrame(() => {
-        skipRef.current = false;
-      });
-    });
+    const ro = new ResizeObserver(() => pin());
     ro.observe(content);
     return () => ro.disconnect();
-  }, [converting]);
+  }, [converting, pin]);
 
   return (
     <>
@@ -252,15 +228,8 @@ export function MarkdownScrollBox({
       >
         <div
           ref={boxRef}
-          onScroll={() => {
-            if (skipRef.current || !converting) return;
-            const el = boxRef.current;
-            if (!el) return;
-            if (el.scrollHeight - el.scrollTop - el.clientHeight > 40) {
-              stickRef.current = false;
-              onUserScrollAway?.();
-            }
-          }}
+          onScroll={onScroll}
+          onWheel={onWheel}
           className="html2md-scroll-body"
         >
           <div ref={contentRef} className="px-4">

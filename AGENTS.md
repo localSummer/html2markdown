@@ -46,7 +46,7 @@ components/ui/         # shadcn 风格组件，保持通用
 - **任务说明**：扫描与点选共用；非空则强制 AI。本地转换忽略任务说明。自动扫描不要清空已输入的 prompt。
 - **导出**：`withSourceMeta` 只用于复制/下载，不要写进预览或 IndexedDB。
 - **连通探测**：仅设置页按钮触发 `GET .../models`，不要在输入时请求，404 不要改打 chat。
-- **跟滚**：`MarkdownScrollBox` 在转换中用 `ResizeObserver` 跟随内容高度（含图片撑开）。用户上翻超过约 40px 停止跟随。不要再引入增高启发式或图片 `load` 双通道。
+- **跟滚**：`MarkdownScrollBox` 在转换中用 `ResizeObserver` 跟随内容高度（含图片撑开）。触摸板/滚轮手势进行中不要写 `scrollTop`；`scrollend` 仅在用户手势中结算（离开底部约 40px 停跟，贴底才恢复）。程序 pin 产生的 `scrollend` 不得再 pin，否则 Mac 叠加滚动条会空闪。已在底部时不要反复写 `scrollTop`。不要再引入增高启发式或图片 `load` 双通道。
 - **不支持的页面**：`lib/page-support.ts`（`chrome://`、扩展页、网上应用店、`view-source:`、`file:`、内置 PDF）。新限制补在这里并补测试。
 - **设置 / 历史**：`chrome.storage` + IndexedDB，不要改成远程存储。
 
