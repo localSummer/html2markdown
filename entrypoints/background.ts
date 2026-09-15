@@ -23,6 +23,7 @@ export default defineBackground(() => {
   function disableTab(tabId: number): void {
     openTabIds.delete(tabId);
     void browser.sidePanel.setOptions({ tabId, enabled: false });
+    void browser.tabs.sendMessage(tabId, { type: 'CLEAR_HIGHLIGHT' }).catch(() => {});
   }
 
   async function syncTab(tabId: number): Promise<void> {

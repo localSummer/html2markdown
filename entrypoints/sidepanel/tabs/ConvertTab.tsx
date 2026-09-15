@@ -343,6 +343,19 @@ export function ConvertTab({
   }, [activeTabId]);
 
   useEffect(() => {
+    const onHide = () => {
+      const id = activeTabIdRef.current;
+      if (id === undefined) return;
+      const r = getRefs(id);
+      r.scanGen += 1;
+      r.abort?.abort();
+      void sendToTab(id, { type: 'CLEAR_HIGHLIGHT' }).catch(() => {});
+    };
+    window.addEventListener('pagehide', onHide);
+    return () => window.removeEventListener('pagehide', onHide);
+  }, [getRefs]);
+
+  useEffect(() => {
     if (!tabVisible || activeTabId === undefined || !active) return;
     if (hydrateBusyRef.current > 0) return;
     if (active.unsupported) return;
@@ -415,6 +428,8 @@ export function ConvertTab({
   const displayVisionHint = useAi ? active.visionHint || preVisionHint : '';
 
   const highlight = async (region: RegionType | null) => {
+    // 侧栏正在卸掉：不要把迟到的 HIGHLIGHT 再画回去
+    if (document.visibilityState === 'hidden') return;
     if (!highlightOn || region === null) {
       if (activeTabId !== undefined) {
         await sendToTab(activeTabId, { type: 'CLEAR_HIGHLIGHT' }).catch(() => {});
