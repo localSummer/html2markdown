@@ -63,10 +63,9 @@ function ensureMounted(): boolean {
       display: flex;
       align-items: center;
       justify-content: center;
-      width: ${SIZE + 10}px;
-      height: ${SIZE + 10}px;
-      padding: 0 10px 0 0;
-      border-radius: 50% 0 0 50%;
+      width: ${SIZE}px;
+      height: ${SIZE}px;
+      border-radius: 0;
       background: transparent;
       cursor: pointer;
       user-select: none;
@@ -82,12 +81,18 @@ function ensureMounted(): boolean {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, oklch(0.60 0.16 160), oklch(0.45 0.14 160));
+      /* 停靠姿态：半圆嵌在视口边缘上，像从屏幕侧沿「长」出来 */
+      margin-right: -${Math.round(SIZE / 5)}px;
+      background: linear-gradient(135deg, oklch(0.60 0.16 160 / 0.82), oklch(0.45 0.14 160 / 0.82));
       box-shadow:
-        0 2px 8px rgba(0, 0, 0, 0.28),
-        0 0 0 1px rgba(255, 255, 255, 0.25),
-        inset 0 1px 1px rgba(255, 255, 255, 0.3);
-      transition: box-shadow .18s ease, transform .15s cubic-bezier(0.22, 1, 0.36, 1);
+        0 2px 8px rgba(0, 0, 0, 0.22),
+        0 0 0 1px rgba(255, 255, 255, 0.22),
+        inset 0 1px 1px rgba(255, 255, 255, 0.25);
+      transition: box-shadow .18s ease, background .18s ease, transform .15s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    /* 悬停才完全「实体化」：静态时让出下方内容，交互时给足可读性 */
+    .tab:hover .dot, .tab:focus-visible .dot {
+      background: linear-gradient(135deg, oklch(0.60 0.16 160), oklch(0.45 0.14 160));
     }
     .tab:hover .dot {
       box-shadow:
@@ -95,18 +100,19 @@ function ensureMounted(): boolean {
         0 0 10px oklch(0.60 0.16 160 / 0.55),
         0 0 0 1px rgba(255, 255, 255, 0.3),
         inset 0 1px 1px rgba(255, 255, 255, 0.3);
-      transform: translateX(-2px);
+      transform: translateX(-1px);
     }
-    .tab:active .dot { transform: translateX(-2px) scale(0.94); }
+    .tab:active .dot { transform: translateX(-1px) scale(0.94); }
     .tab:focus-visible .dot {
       box-shadow:
-        0 2px 8px rgba(0, 0, 0, 0.28),
+        0 2px 8px rgba(0, 0, 0, 0.22),
         0 0 0 3px oklch(0.60 0.16 160 / 0.55),
-        0 0 0 1px rgba(255, 255, 255, 0.25);
+        0 0 0 1px rgba(255, 255, 255, 0.22);
     }
     .tab.dragging { transition: none; cursor: grabbing; }
     .tab.dragging .dot {
       transform: scale(1.06);
+      background: linear-gradient(135deg, oklch(0.60 0.16 160), oklch(0.45 0.14 160));
       box-shadow:
         0 6px 20px rgba(0, 0, 0, 0.35),
         0 0 14px oklch(0.60 0.16 160 / 0.6),
