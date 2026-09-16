@@ -670,7 +670,7 @@ export function ConvertTab({
       status: '正在提取当前区域…',
       error: '',
       visionHint: '',
-      progress: 8,
+      progress: 0,
       fromHistory: false,
     });
     try {
@@ -687,7 +687,7 @@ export function ConvertTab({
       patchState(id, {
         pageTitle: extracted.title || active.pageTitle,
         status: '正在转换为 Markdown…',
-        progress: 18,
+        ...(useAiRun ? { progress: 18 } : {}),
       });
       let md: string;
       if (useAiRun) {

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Copy, Download, MousePointerClick, ScanSearch, Sparkles, X } from 'lucide-react';
+import { CircleAlert, Copy, Download, MousePointerClick, RefreshCw, ScanSearch, Sparkles, Square, X } from 'lucide-react';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -140,6 +140,23 @@ export function ConvertTabUI(props: {
     stopAutoPreview,
   );
 
+  // 隐式切到 AI（模板选择/任务说明）的瞬间，给「AI」芯片一次性荧光脉冲
+  const aiChipRef = useRef<HTMLButtonElement>(null);
+  const prevAiOnRef = useRef(false);
+  useEffect(() => {
+    const aiOn = useAi;
+    if (aiOn && !prevAiOnRef.current) {
+      const chip = aiChipRef.current;
+      if (chip) {
+        chip.classList.remove('html2md-chip-pulse');
+        // 强制 reflow 重启动画
+        void chip.offsetWidth;
+        chip.classList.add('html2md-chip-pulse');
+      }
+    }
+    prevAiOnRef.current = aiOn;
+  }, [useAi]);
+
   useLayoutEffect(() => {
     if (reader.resultId !== active.resultId) {
       reader.resultId = active.resultId;
@@ -239,8 +256,8 @@ export function ConvertTabUI(props: {
                   size="sm"
                   onClick={phase === 'converting' ? onAbort : onCancelScan}
                 >
-                  <X />
-                  取消
+                  {phase === 'converting' ? <Square /> : <X />}
+                  {phase === 'converting' ? '中止' : phase === 'scanning' ? '取消扫描' : '取消选取'}
                 </Button>
               ) : null}
             </div>
@@ -277,9 +294,15 @@ export function ConvertTabUI(props: {
                       if (busy) return;
                       onHighlight(active.selected);
                     }}
-                    onClick={() => {
+                    onClick={(e) => {
                       onSelect(r.id);
                       onHighlight(r.id);
+                      if (active.selected !== r.id) {
+                        const el = e.currentTarget;
+                        el.classList.remove('html2md-chip-pulse');
+                        void el.offsetWidth;
+                        el.classList.add('html2md-chip-pulse');
+                      }
                     }}
                     className={cn(
                       'flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-all',
@@ -327,6 +350,11 @@ export function ConvertTabUI(props: {
                       ))}
                     </SelectContent>
                   </Select>
+                  {useAi && active.templateId !== 'plain' ? (
+                    <p className="text-xs text-muted-foreground">已选笔记模板，将使用 AI 转换</p>
+                  ) : !useAi ? (
+                    <p className="text-xs text-muted-foreground">普通 Markdown 在本机转换</p>
+                  ) : null}
                 </div>
                 <Label htmlFor="task-prompt" className="text-muted-foreground">
                   {useAi && active.templateId !== 'plain' ? '补充要求（可选）' : '任务说明（可空；填写后走 AI 转换）'}
@@ -355,7 +383,8 @@ export function ConvertTabUI(props: {
         ) : null}
 
         {err ? (
-          <Alert variant="destructive">
+          <Alert className="animate-in fade-in duration-200" variant={active.phase === 'cancelled' ? 'default' : 'destructive'}>
+            <CircleAlert />
             <AlertDescription>
               {err}
               <span className="ml-2 inline-flex gap-2">
@@ -380,12 +409,11 @@ export function ConvertTabUI(props: {
                   </Button>
                 ) : null}
               </span>
-            </AlertDescription>
-          </Alert>
+            </AlertDescription>          </Alert>
         ) : null}
 
         {active.markdown ? (
-          <Card className="gap-3 py-4">
+          <Card key={active.resultId} className="animate-in fade-in slide-in-from-bottom-1 gap-3 py-4 duration-200">
             <CardHeader className="px-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                   <CardTitle className="min-w-0 break-words">{resultTitle}</CardTitle>
@@ -405,13 +433,28 @@ export function ConvertTabUI(props: {
             </CardHeader>
             <CardContent className="px-4">
               {configChanged && !converting ? (
-                <p className="mb-2 text-xs text-muted-foreground" role="status">配置已变更，待重新生成</p>
+                <div
+                  role="status"
+                  className="mb-2 flex animate-in fade-in slide-in-from-bottom-1 items-center gap-2 rounded-lg border border-primary/20 bg-primary-soft/60 px-3 py-2 text-xs text-primary-soft-foreground duration-200"
+                >
+                  <RefreshCw className="size-3.5 shrink-0" />
+                  <span className="min-w-0">配置已变更</span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="ml-auto h-auto p-0 text-inherit underline"
+                    onClick={onConvert}
+                  >
+                    重新生成
+                  </Button>
+                </div>
               ) : null}
               <MarkdownScrollBox
                 key={active.resultId}
                 markdown={active.markdown}
                 previewMode={previewMode}
                 converting={converting}
+                flow
                 noteFormat={active.resultNoteFormat}
                 onUserScrollAway={stopAutoPreview}
               />
@@ -459,7 +502,7 @@ export function ConvertTabUI(props: {
               <ToggleGroupItem value="local" disabled={aiForced || converting} className="px-2">
                 本地
               </ToggleGroupItem>
-              <ToggleGroupItem value="ai" disabled={aiForced || converting} className="px-2">
+              <ToggleGroupItem ref={aiChipRef} value="ai" disabled={aiForced || converting} className="px-2">
                 <Sparkles />
                 AI
               </ToggleGroupItem>
@@ -468,9 +511,9 @@ export function ConvertTabUI(props: {
               <p className="text-xs text-muted-foreground">任务说明已填写，将使用 AI 转换</p>
             ) : null}
           </div>
-        ) : aiForced ? (
+        ) : aiForced || (useAi && active.templateId !== 'plain') ? (
           <p className="text-xs text-muted-foreground">
-            填写任务说明需要 API Key
+            {useAi && active.templateId !== 'plain' ? '笔记模板需要 API Key' : '填写任务说明需要 API Key'}
             <Button variant="link" size="sm" className="h-auto p-0 pl-1" onClick={onOpenSettings}>
               去设置
             </Button>
@@ -484,16 +527,21 @@ export function ConvertTabUI(props: {
             phase === 'converting' && 'hover:translate-y-0',
           )}
         >
-          {phase === 'converting' ? (
+          {phase === 'converting' && active.progress > 0 ? (
             <span
               aria-hidden
-              className="absolute inset-y-0 left-0 bg-primary-foreground/25 transition-[width] duration-200 ease-out"
+              className="absolute inset-y-0 left-0 bg-primary-foreground/25 transition-[width] duration-300 ease-out"
               style={{ width: `${Math.max(4, Math.min(100, active.progress))}%` }}
             />
           ) : null}
-          <span className="relative">
+          {phase === 'converting' && active.progress === 0 ? (
+            <span aria-hidden className="html2md-progress-indeterminate absolute inset-y-0 left-0 h-full bg-primary-foreground/25" />
+          ) : null}
+          <span className="relative min-w-0 truncate">
             {phase === 'converting'
-              ? `${active.status || '转换中…'} ${Math.round(active.progress)}%`
+              ? active.progress > 0
+                ? `${active.status || '转换中…'} ${Math.round(active.progress)}%`
+                : active.status || '转换中…'
               : active.markdown
                 ? useAi
                   ? '重新 AI 转换'

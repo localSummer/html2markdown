@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Monitor, Moon, Sun } from 'lucide-react';
+import { CircleCheck, CircleX, Eye, EyeOff, LoaderCircle, Monitor, Moon, Sun } from 'lucide-react';
 import { ACTION_COMMAND, shortcutLabel, shortcutsPageUrl } from '../../../lib/shortcut';
 import { applyMdFontSize, applyTheme } from '../../../lib/theme';
 import { probeCompletions } from '../../../lib/llm/client';
@@ -55,6 +55,30 @@ function Field({
         {label}
       </Label>
       <Input id={id} {...inputProps} />
+    </div>
+  );
+}
+
+function SecretField(props: { id: string; label: string } & React.ComponentProps<typeof Input>) {
+  const [shown, setShown] = useState(false);
+  const { id, label, ...inputProps } = props;
+  return (
+    <div className="grid gap-2">
+      <Label htmlFor={id} className="text-muted-foreground">
+        {label}
+      </Label>
+      <div className="relative">
+        <Input id={id} {...inputProps} type={shown ? 'text' : 'password'} className="pr-10" />
+        <button
+          type="button"
+          aria-label={shown ? '隐藏 API Key' : '显示 API Key'}
+          aria-pressed={shown}
+          onClick={() => setShown((v) => !v)}
+          className="absolute right-1.5 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring/50 focus-visible:ring-[3px] cursor-pointer"
+        >
+          {shown ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+        </button>
+      </div>
     </div>
   );
 }
@@ -228,10 +252,9 @@ export function SettingsTab({
               patch({ ...settings, text: { ...settings.text, baseURL: e.target.value } })
             }
           />
-          <Field
+          <SecretField
             id="text-api-key"
             label="API Key"
-            type="password"
             value={settings.text.apiKey}
             onChange={(e) =>
               patch({ ...settings, text: { ...settings.text, apiKey: e.target.value } })
@@ -264,11 +287,21 @@ export function SettingsTab({
               disabled={probing || !settings.text.apiKey.trim() || !settings.text.baseURL.trim()}
               onClick={() => void onProbe()}
             >
+              {probing ? <LoaderCircle className="animate-spin" /> : null}
               {probing ? '测试中…' : '测试连接'}
             </Button>
             {probeMsg ? (
-              <span className={probeOk ? 'text-xs text-primary-soft-foreground' : 'text-xs text-destructive'}>
-                {probeMsg}
+              <span
+                className={`inline-flex min-w-0 items-center gap-1 text-xs ${
+                  probeOk ? 'text-primary-soft-foreground' : 'text-destructive'
+                }`}
+              >
+                {probeOk === true ? (
+                  <CircleCheck className="size-3.5 shrink-0" />
+                ) : probeOk === false ? (
+                  <CircleX className="size-3.5 shrink-0" />
+                ) : null}
+                <span className="truncate">{probeMsg}</span>
               </span>
             ) : null}
           </div>
@@ -289,10 +322,14 @@ export function SettingsTab({
               onCheckedChange={(visionEnabled) => patch({ ...settings, visionEnabled })}
             />
           </div>
+          <div className="html2md-expand" data-open={settings.visionEnabled ? 'true' : 'false'}>
+            <div className="html2md-expand-inner" inert={!settings.visionEnabled}>
+              <div className="grid gap-3">
           <Field
             id="vision-max"
             label="识别上限"
             inputMode="numeric"
+            disabled={!settings.visionEnabled}
             value={String(settings.visionMaxImages)}
             onChange={(e) => {
               const n = Number(e.target.value);
@@ -304,6 +341,7 @@ export function SettingsTab({
             <Label htmlFor="vision-inherit-key">与文本使用相同 API Key</Label>
             <Switch
               id="vision-inherit-key"
+              disabled={!settings.visionEnabled}
               checked={settings.visionUseTextApiKey}
               onCheckedChange={(visionUseTextApiKey) =>
                 patch({ ...settings, visionUseTextApiKey })
@@ -313,16 +351,16 @@ export function SettingsTab({
           <Field
             id="vision-base-url"
             label="baseURL"
+            disabled={!settings.visionEnabled}
             value={settings.vision.baseURL}
             onChange={(e) =>
               patch({ ...settings, vision: { ...settings.vision, baseURL: e.target.value } })
             }
           />
-          <Field
+          <SecretField
             id="vision-api-key"
             label="API Key"
-            type="password"
-            disabled={settings.visionUseTextApiKey}
+            disabled={settings.visionUseTextApiKey || !settings.visionEnabled}
             value={settings.visionUseTextApiKey ? settings.text.apiKey : settings.vision.apiKey}
             onChange={(e) =>
               patch({ ...settings, vision: { ...settings.vision, apiKey: e.target.value } })
@@ -331,11 +369,15 @@ export function SettingsTab({
           <Field
             id="vision-model"
             label="model"
+            disabled={!settings.visionEnabled}
             value={settings.vision.model}
             onChange={(e) =>
               patch({ ...settings, vision: { ...settings.vision, model: e.target.value } })
             }
           />
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

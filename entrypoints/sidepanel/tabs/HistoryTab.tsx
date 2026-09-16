@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, Copy, Download, ExternalLink, Search, Trash2 } from 'lucide-react';
+import { ChevronDown, Copy, Download, ExternalLink, Search, Trash2, X } from 'lucide-react';
 import { withSourceMeta } from '../../../lib/export';
 import {
   clearRecords,
@@ -24,6 +24,20 @@ export function HistoryTab({ active = true }: { active?: boolean }) {
   const [closingId, setClosingId] = useState<string | null>(null);
   const [fullId, setFullId] = useState<string | null>(null);
   const [views, setViews] = useState<Record<string, PreviewMode>>({});
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const armConfirm = (arm: () => void) => {
+    if (confirmTimer.current) clearTimeout(confirmTimer.current);
+    arm();
+    confirmTimer.current = setTimeout(() => {
+      setConfirmClear(false);
+      setConfirmId(null);
+    }, 2500);
+  };
+  useEffect(() => () => {
+    if (confirmTimer.current) clearTimeout(confirmTimer.current);
+  }, []);
   const viewFor = (row: HistoryRecord): PreviewMode => views[row.id] ?? (row.noteFormat ? 'notes' : 'preview');
   const chooseView = (id: string, mode: PreviewMode) => setViews((prev) => ({ ...prev, [id]: mode }));
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -85,23 +99,46 @@ export function HistoryTab({ active = true }: { active?: boolean }) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="搜索标题、URL 或正文"
-            className="pl-8"
+            className="pl-8 pr-8"
           />
+          {query ? (
+            <button
+              type="button"
+              aria-label="清除搜索"
+              onClick={() => setQuery('')}
+              className="absolute right-1.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring/50 focus-visible:ring-[3px] cursor-pointer"
+            >
+              <X className="size-3.5" />
+            </button>
+          ) : null}
         </div>
         {rows.length > 0 ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive hover:text-destructive"
-            onClick={() => {
-              if (!confirm('清空全部历史？')) return;
-              void clearRecords().then(reload);
-              resetOpen();
-            }}
-          >
-            <Trash2 />
-            清空
-          </Button>
+          confirmClear ? (
+            <Button
+              variant="destructive"
+              size="sm"
+              className="shrink-0"
+              onClick={() => {
+                if (confirmTimer.current) clearTimeout(confirmTimer.current);
+                setConfirmClear(false);
+                void clearRecords().then(reload);
+                resetOpen();
+              }}
+            >
+              <Trash2 />
+              确认清空
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="shrink-0 text-destructive hover:text-destructive"
+              onClick={() => armConfirm(() => setConfirmClear(true))}
+            >
+              <Trash2 />
+              清空
+            </Button>
+          )
         ) : null}
         </div>
       </div>
@@ -109,7 +146,18 @@ export function HistoryTab({ active = true }: { active?: boolean }) {
       {filtered.length === 0 ? (
         <div className="px-3 pt-3">
         <Alert>
-          <AlertDescription>暂无记录</AlertDescription>
+          <AlertDescription>
+            {query ? (
+              <>
+                没有匹配「{query}」的记录
+                <Button variant="link" size="sm" className="h-auto p-0 pl-1" onClick={() => setQuery('')}>
+                  清除搜索
+                </Button>
+              </>
+            ) : (
+              '暂无记录'
+            )}
+          </AlertDescription>
         </Alert>
         </div>
       ) : (
@@ -131,7 +179,7 @@ export function HistoryTab({ active = true }: { active?: boolean }) {
                     {r.noteFormat ? <div className="mt-1 text-xs text-muted-foreground">{getNoteTemplate(r.noteFormat.templateId)?.label ?? '笔记'}</div> : null}
                   </div>
                   <ChevronDown
-                    className={`mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-300 ${
+                    className={`mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-250 ${
                       openId === r.id ? 'rotate-180' : ''
                     }`}
                   />
@@ -184,26 +232,42 @@ export function HistoryTab({ active = true }: { active?: boolean }) {
                             打开原页
                           </Button>
                           <FullscreenButton onClick={() => setFullId(r.id)} />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => {
-                              void deleteRecord(r.id).then(reload);
-                              resetOpen();
-                            }}
-                          >
-                            <Trash2 />
-                            删除
-                          </Button>
+                          {confirmId === r.id ? (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => {
+                                if (confirmTimer.current) clearTimeout(confirmTimer.current);
+                                setConfirmId(null);
+                                void deleteRecord(r.id).then(reload);
+                                resetOpen();
+                              }}
+                            >
+                              <Trash2 />
+                              确认删除
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => armConfirm(() => setConfirmId(r.id))}
+                            >
+                              <Trash2 />
+                              删除
+                            </Button>
+                          )}
                         </div>
                         <PreviewModeControl value={viewFor(r)} onChange={(mode) => chooseView(r.id, mode)} noteFormat={r.noteFormat} />
-                        <MarkdownScrollBox
-                          markdown={r.markdown}
-                          previewMode={viewFor(r)}
-                          noteFormat={r.noteFormat}
-                          maxHeightClass="max-h-56"
-                        />
+                        <div className="relative">
+                          <MarkdownScrollBox
+                            markdown={r.markdown}
+                            previewMode={viewFor(r)}
+                            noteFormat={r.noteFormat}
+                            maxHeightClass="max-h-72"
+                          />
+                          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 rounded-b-lg bg-gradient-to-t from-muted/30 to-transparent" />
+                        </div>
                       </CardContent>
                     ) : null}
                   </div>

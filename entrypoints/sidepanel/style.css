@@ -170,6 +170,16 @@ body {
     transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
     width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+/* 隐式管道切换 / 新选中态的一次性荧光脉冲：只出现在状态变化瞬间 */
+@keyframes html2md-chip-pulse {
+  0% { box-shadow: 0 0 0 0 transparent; }
+  45% { box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 45%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.html2md-chip-pulse {
+  animation: html2md-chip-pulse 0.45s ease-out 1;
+}
 .html2md-tab-panel {
   height: 100%;
   min-height: 0;
@@ -240,5 +250,8 @@ body {
   .html2md-tab-indicator,
   .html2md-tab-panel {
     transition: none;
+  }
+  .html2md-chip-pulse {
+    animation: none;
   }
 }

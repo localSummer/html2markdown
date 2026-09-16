@@ -80,7 +80,7 @@ function ImageLightbox({ shot, onClose }: { shot: Shot; onClose: () => void }) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex flex-col bg-black/80"
+      className="fixed inset-0 z-[60] flex animate-in fade-in flex-col bg-black/80 duration-200"
       role="dialog"
       aria-modal="true"
       aria-label="图片预览"
@@ -131,7 +131,7 @@ function ImageLightbox({ shot, onClose }: { shot: Shot; onClose: () => void }) {
             ref={imgRef}
             src={shot.src}
             alt={shot.alt}
-            className="rounded-md shadow-lg"
+            className="animate-in zoom-in-95 rounded-md shadow-lg duration-200"
             style={
               base
                 ? { width: w, height: h, maxWidth: 'none', maxHeight: 'none' }
@@ -190,6 +190,7 @@ export function MarkdownScrollBox({
   previewMode,
   converting = false,
   fill = false,
+  flow = false,
   maxHeightClass = 'max-h-[55vh]',
   noteFormat,
   onUserScrollAway,
@@ -198,6 +199,7 @@ export function MarkdownScrollBox({
   previewMode: PreviewMode;
   converting?: boolean;
   fill?: boolean;
+  flow?: boolean;
   maxHeightClass?: string;
   noteFormat?: unknown;
   onUserScrollAway?: () => void;
@@ -205,32 +207,46 @@ export function MarkdownScrollBox({
   const boxRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [shot, setShot] = useState<Shot | null>(null);
-  const { pin, onScroll, onWheel } = useStickToBottom(boxRef, converting, onUserScrollAway);
+  // flow 模式下内容随外层滚动，流式跟滚交给外层 stick，内层不再自滚
+  const stick = useStickToBottom(boxRef, converting && !flow, onUserScrollAway);
+  const { pin, onScroll, onWheel } = stick;
 
   useEffect(() => {
-    if (!converting) return;
+    if (!converting || flow) return;
     const content = contentRef.current;
     if (!content) return;
     const ro = new ResizeObserver(() => pin());
     ro.observe(content);
     return () => ro.disconnect();
-  }, [converting, pin]);
+  }, [converting, flow, pin]);
+
+  // flow 模式下内容高度变化时同步外层 pin（视图交换导致内容增高时保持贴底）
+  useEffect(() => {
+    if (!converting || !flow || !onUserScrollAway) return;
+    const content = contentRef.current;
+    if (!content) return;
+    const ro = new ResizeObserver(() => pin());
+    ro.observe(content);
+    return () => ro.disconnect();
+  }, [converting, flow, pin, onUserScrollAway]);
 
   return (
     <>
       <div
         className={cn(
-          'html2md-md flex min-h-0 flex-col overflow-hidden py-3 bg-gradient-to-b from-muted/40 to-muted/20 shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]',
+          'html2md-md flex min-h-0 flex-col bg-gradient-to-b from-muted/40 to-muted/20 shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]',
           fill
             ? 'h-full'
-            : cn('rounded-lg border border-border/70', maxHeightClass),
+            : flow
+              ? 'rounded-lg border border-border/70'
+              : cn('overflow-hidden rounded-lg border border-border/70 py-3', maxHeightClass),
         )}
       >
         <div
           ref={boxRef}
           onScroll={onScroll}
           onWheel={onWheel}
-          className="html2md-scroll-body"
+          className={flow ? undefined : 'html2md-scroll-body'}
         >
           <div ref={contentRef} className="px-4">
             <div className="html2md-view-swap">
@@ -281,7 +297,7 @@ export function MarkdownFullscreen({
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex flex-col bg-background">
+    <div className="fixed inset-0 z-50 flex animate-in fade-in flex-col bg-background duration-200">
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
         <div className="min-w-0 flex-1 truncate text-sm font-medium">{title}</div>
         {toolbar}
@@ -290,7 +306,7 @@ export function MarkdownFullscreen({
           退出全屏
         </Button>
       </div>
-      <div className="min-h-0 flex-1">{children}</div>
+      <div className="min-h-0 flex-1 animate-in zoom-in-95 duration-200">{children}</div>
     </div>,
     document.body,
   );

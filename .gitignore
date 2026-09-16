@@ -6,6 +6,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+.claude
+.impeccable
 node_modules
 .output
 stats.html

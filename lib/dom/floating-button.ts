@@ -1,6 +1,6 @@
 const HOST_ID = 'html2md-fab-host';
 const STORAGE_KEY = 'html2md.fab.pos';
-const SIZE = 30;
+const SIZE = 36;
 const DRAG_THRESHOLD = 4;
 
 let host: HTMLElement | null = null;
@@ -52,6 +52,8 @@ function ensureMounted(): boolean {
   host.id = HOST_ID;
   shadow = host.attachShadow({ mode: 'closed' });
   const style = document.createElement('style');
+  // 荧光笔实验室的语言延伸到网页画布：单一荧光绿圆、清晰边缘（无模糊光晕）、
+  // 明暗网页上都用投影与描边双层兜底可读性。发光只出现在 hover / 拖拽状态。
   style.textContent = `
     :host { all: initial; }
     .tab {
@@ -61,37 +63,62 @@ function ensureMounted(): boolean {
       display: flex;
       align-items: center;
       justify-content: center;
-      width: ${SIZE + 6}px;
-      height: ${SIZE + 12}px;
-      padding: 0 6px 0 0;
-      border-radius: 20px 0 0 20px;
-      background: #ffffff;
-      box-shadow: -2px 2px 10px rgba(0,0,0,0.12), -1px 1px 4px rgba(0,0,0,0.08);
+      width: ${SIZE + 10}px;
+      height: ${SIZE + 10}px;
+      padding: 0 10px 0 0;
+      border-radius: 50% 0 0 50%;
+      background: transparent;
       cursor: pointer;
       user-select: none;
       -webkit-user-select: none;
       touch-action: none;
-      transition: transform .12s ease, box-shadow .12s ease;
+      transition: transform .15s cubic-bezier(0.22, 1, 0.36, 1);
       z-index: 2147483646;
     }
-    .tab:hover { box-shadow: -3px 3px 14px rgba(0,0,0,0.16), -1px 1px 4px rgba(0,0,0,0.1); }
-    .tab:active { transform: scale(0.96); }
-    .tab.dragging { transition: none; cursor: grabbing; transform: none; filter: none; }
     .dot {
       width: ${SIZE}px;
       height: ${SIZE}px;
-      border-radius: 50%;
+      border-radius: 50% 0 0 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, oklch(0.62 0.17 160), oklch(0.52 0.15 160));
-      box-shadow: inset 0 1px 1px rgba(255,255,255,0.35), 0 2px 6px rgba(16,185,129,0.35);
-      filter: blur(0.6px);
-      opacity: 0.88;
-      transition: filter .18s ease, opacity .18s ease;
+      background: linear-gradient(135deg, oklch(0.60 0.16 160), oklch(0.45 0.14 160));
+      box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.28),
+        0 0 0 1px rgba(255, 255, 255, 0.25),
+        inset 0 1px 1px rgba(255, 255, 255, 0.3);
+      transition: box-shadow .18s ease, transform .15s cubic-bezier(0.22, 1, 0.36, 1);
     }
-    .tab:hover .dot { filter: blur(0); opacity: 1; }
-    .dot svg { width: 16px; height: 16px; pointer-events: none; display: block; }
+    .tab:hover .dot {
+      box-shadow:
+        0 3px 12px rgba(0, 0, 0, 0.32),
+        0 0 10px oklch(0.60 0.16 160 / 0.55),
+        0 0 0 1px rgba(255, 255, 255, 0.3),
+        inset 0 1px 1px rgba(255, 255, 255, 0.3);
+      transform: translateX(-2px);
+    }
+    .tab:active .dot { transform: translateX(-2px) scale(0.94); }
+    .tab:focus-visible .dot {
+      box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.28),
+        0 0 0 3px oklch(0.60 0.16 160 / 0.55),
+        0 0 0 1px rgba(255, 255, 255, 0.25);
+    }
+    .tab.dragging { transition: none; cursor: grabbing; }
+    .tab.dragging .dot {
+      transform: scale(1.06);
+      box-shadow:
+        0 6px 20px rgba(0, 0, 0, 0.35),
+        0 0 14px oklch(0.60 0.16 160 / 0.6),
+        0 0 0 1px rgba(255, 255, 255, 0.3),
+        inset 0 1px 1px rgba(255, 255, 255, 0.3);
+    }
+    .dot svg { width: 18px; height: 18px; pointer-events: none; display: block; }
+    @media (prefers-reduced-motion: reduce) {
+      .tab, .dot { transition: none; }
+      .tab:hover .dot { transform: none; }
+      .tab.dragging .dot { transform: none; }
+    }
   `;
   btn = document.createElement('div');
   btn.className = 'tab';
@@ -100,16 +127,25 @@ function ensureMounted(): boolean {
   btn.setAttribute('aria-label', '打开网页转 Markdown');
   btn.innerHTML = `
     <span class="dot">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 7 V5 a2 2 0 0 1 2 -2 h2"/>
-        <path d="M17 3 h2 a2 2 0 0 1 2 2 v2"/>
-        <path d="M21 17 v2 a2 2 0 0 1 -2 2 h-2"/>
-        <path d="M7 21 h-2 a2 2 0 0 1 -2 -2 v-2"/>
-        <path d="M9.2 8.6 l1.1 2.6 l2.6 1.1 l-2.6 1.1 l-1.1 2.6 l-1.1 -2.6 l-2.6 -1.1 l2.6 -1.1 z" fill="#ffffff" stroke="none"/>
-        <text x="15.2" y="16.4" font-family="-apple-system,system-ui,sans-serif" font-size="9" font-weight="700" fill="#ffffff" stroke="none" text-anchor="middle">A</text>
+      <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 6 V5 a1 1 0 0 1 1 -1 h1"/>
+        <path d="M10 4 h4"/>
+        <path d="M18 4 h1 a1 1 0 0 1 1 1 v1"/>
+        <path d="M20 10 v4"/>
+        <path d="M20 18 v1 a1 1 0 0 1 -1 1 h-1"/>
+        <path d="M14 20 h-4"/>
+        <path d="M6 20 h-1 a1 1 0 0 1 -1 -1 v-1"/>
+        <path d="M8 10 v4 l4.5 2.6 a1.7 1.7 0 0 0 1.7 -2.9 L10 10 z" fill="#ffffff" stroke="none"/>
       </svg>
     </span>
   `;
+  // 键盘可达：Enter / Space 等同点击
+  btn.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      openSidePanel();
+    }
+  });
   shadow.append(style, btn);
   document.documentElement.append(host);
   return true;
@@ -155,6 +191,18 @@ function attachDrag(initialY: number, hostname: string) {
     btn?.classList.remove('dragging');
     if (moved) {
       void saveY(hostname, clampY(initialY));
+      // 落定回弹：从 1.06 缩放回到 1，给出「已放置」的确认感
+      const dot = btn?.querySelector<HTMLElement>('.dot');
+      if (dot) {
+        dot.style.transition = 'transform .28s cubic-bezier(0.22, 1, 0.36, 1)';
+        requestAnimationFrame(() => {
+          dot.style.transform = 'scale(1)';
+          setTimeout(() => {
+            dot.style.transition = '';
+            dot.style.transform = '';
+          }, 300);
+        });
+      }
     } else {
       openSidePanel();
     }
