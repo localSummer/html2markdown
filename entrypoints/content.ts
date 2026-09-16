@@ -1,28 +1,25 @@
 import { isExtensionMessage, type ExtensionResponse } from '../lib/messages';
 
 export default defineContentScript({
+  // 运行时注册（wxt.config.ts 的 host_permissions 承载 matches）：
+  // 脚本只在用户与扩展交互后由 background 注入，不用 <all_urls> 常驻。
+  // 漂浮按钮不在这里：它由 fab.ts 单独承担（见 lib/dom/fab-registration.ts）。
   matches: ['http://*/*', 'https://*/*'],
+  registration: 'runtime',
   runAt: 'document_idle',
-  async main() {
-    const { loadSettings, watchSettings } = await import('../lib/settings');
-    const { mountFloatingButton, unmountFloatingButton } = await import('../lib/dom/floating-button');
+  main(ctx) {
+    // SW 被杀重建后 background 可能重复 executeScript：靠窗口标记让第二份
+    // 脚本直接退出，避免 onMessage 双监听器导致消息处理两次。
+    const FLAG = '__html2md_agent__';
+    const w = window as typeof window & { [FLAG]?: boolean };
+    if (w[FLAG]) return;
+    w[FLAG] = true;
 
-    let mounted = false;
-    const apply = async (enabled: boolean) => {
-      if (enabled && !mounted) {
-        await mountFloatingButton();
-        mounted = true;
-      } else if (!enabled && mounted) {
-        unmountFloatingButton();
-        mounted = false;
-      }
-    };
-
-    const settings = await loadSettings();
-    await apply(settings.floatingButton);
-    watchSettings((s) => void apply(s.floatingButton));
-
-    browser.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
+    const listener = (
+      raw: unknown,
+      _sender: unknown,
+      sendResponse: (res: ExtensionResponse) => void,
+    ): boolean | undefined => {
       if (!isExtensionMessage(raw)) return;
       if (raw.type === 'PING') {
         sendResponse({ ok: true } satisfies ExtensionResponse);
@@ -30,14 +27,25 @@ export default defineContentScript({
       }
       void import('../lib/dom/page-agent')
         .then(({ handlePageMessage }) => handlePageMessage(raw))
-        .then((res) => sendResponse(res))
+        .then((res) => {
+          if (ctx.isValid) sendResponse(res);
+        })
         .catch((err: unknown) => {
-          sendResponse({
-            ok: false,
-            error: err instanceof Error ? err.message : String(err),
-          } satisfies ExtensionResponse);
+          if (ctx.isValid) {
+            sendResponse({
+              ok: false,
+              error: err instanceof Error ? err.message : String(err),
+            } satisfies ExtensionResponse);
+          }
         });
       return true;
+    };
+
+    browser.runtime.onMessage.addListener(listener);
+    // WXT context 失效（扩展更新/重载）时反注册，防止旧监听器残留
+    ctx.onInvalidated(() => {
+      browser.runtime.onMessage.removeListener(listener);
+      delete w[FLAG];
     });
   },
 });

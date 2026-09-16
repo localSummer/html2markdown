@@ -3,6 +3,7 @@ import { CircleCheck, CircleX, Eye, EyeOff, LoaderCircle, Monitor, Moon, Sun } f
 import { ACTION_COMMAND, shortcutLabel, shortcutsPageUrl } from '../../../lib/shortcut';
 import { applyMdFontSize, applyTheme } from '../../../lib/theme';
 import { probeCompletions } from '../../../lib/llm/client';
+import { setFabScriptEnabled, applyFabToOpenTabs } from '../../../lib/dom/fab-registration';
 import {
   DEFAULT_MD_FONT_SIZE,
   MD_FONT_SIZES,
@@ -96,6 +97,14 @@ export function SettingsTab({
     applyTheme(settings.theme);
     applyMdFontSize(settings.mdFontSize);
   }, [settings.theme, settings.mdFontSize]);
+
+  // 漂浮按钮 = 持久注册的独立 content script；设置变化即注册/注销，
+  // 并对已打开页面立即补注入 / 通知卸载（storage 监听做长线同步）
+  useEffect(() => {
+    void setFabScriptEnabled(settings.floatingButton).then(() =>
+      applyFabToOpenTabs(settings.floatingButton),
+    );
+  }, [settings.floatingButton]);
 
   const patch = (next: Settings) => {
     onChange(next);
