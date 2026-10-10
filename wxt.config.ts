@@ -6,7 +6,7 @@ export default defineConfig({
   manifest: {
     name: '网页转 Markdown',
     description: '将当前网页所选区域转为 Markdown，支持复制、下载与历史',
-    version: '0.1.26',
+    version: '0.1.27',
     minimum_chrome_version: '114',
     action: {},
     commands: {

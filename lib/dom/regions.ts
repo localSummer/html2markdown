@@ -131,7 +131,7 @@ export function detectRegions(doc: Document, baseUrl = doc.baseURI || ''): Regio
     if (mainChars + navChars > mainChars * NAV_MERGE_RATIO) {
       regions.push({
         id: 'main_nav',
-        label: '内容+导航',
+        label: '正文+导航',
         charCount: mainChars + navChars,
         ...imageStatsFrom([...mainRoots, ...navs], baseUrl),
       });

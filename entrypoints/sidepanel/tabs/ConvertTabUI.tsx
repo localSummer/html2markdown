@@ -24,7 +24,7 @@ import type { Phase, TabState, ReadingState } from './convert-types.ts';
 const REGION_LABELS: Record<RegionType, string> = {
   main: '主内容',
   nav: '导航',
-  main_nav: '内容+导航',
+  main_nav: '正文+导航',
   full: '全文',
   custom: '指定区域',
 };
@@ -371,6 +371,14 @@ export function ConvertTabUI(props: {
                   rows={3}
                   className="placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input w-full min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-60"
                 />
+                {!settings.text.apiKey && active.taskPrompt.trim() ? (
+                  <p className="text-xs text-muted-foreground">
+                    填写任务说明将使用 AI 转换，需先在设置中配置 API。
+                    <Button variant="link" size="sm" className="h-auto p-0 pl-1" onClick={onOpenSettings}>
+                      去设置
+                    </Button>
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </CardContent>
@@ -458,6 +466,14 @@ export function ConvertTabUI(props: {
                 noteFormat={active.resultNoteFormat}
                 onUserScrollAway={stopAutoPreview}
               />
+            </CardContent>
+          </Card>
+        ) : !active.unsupported && !err && !converting && (phase === 'idle' || phase === 'ready') ? (
+          <Card className="gap-3 py-4">
+            <CardContent className="px-4">
+              <p className="text-sm text-muted-foreground">
+                {active.picked ? '已选中指定区域' : '已自动选中主内容'}，点击下方按钮即可转换
+              </p>
             </CardContent>
           </Card>
         ) : null}
